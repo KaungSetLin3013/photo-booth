@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Trip Photos</title>
+<title>Memories</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
@@ -431,9 +431,9 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
 </div>
 
 <!-- GALLERY SCREEN -->
-<div class="screen active" id="screen-gallery">
+<div class="screen" id="screen-gallery">
   <div class="header">
-    <h1>Trip <span class="accent">Photos</span></h1>
+    <h1>Memo<span class="accent">ries</span></h1>
     <div style="display:flex;gap:8px">
       <div class="header-btn" onclick="loadGallery()" title="Refresh">↻</div>
       <div class="header-btn" onclick="triggerAdminPanel()" title="Admin panel" style="font-size:14px">⚙️</div>
@@ -451,20 +451,20 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
     </div>
   </div>
   <div class="bottom-nav">
-    <button class="nav-btn active" onclick="showScreen('gallery')">
+    <button class="nav-btn" onclick="showScreen('gallery')">
       <span class="icon">🖼</span>Gallery
     </button>
     <button class="nav-btn capture-btn" onclick="showScreen('camera')">
       <div class="capture-ring"><div class="capture-inner"></div></div>
     </button>
-    <button class="nav-btn" onclick="showScreen('camera')">
+    <button class="nav-btn active" onclick="showScreen('camera')">
       <span class="icon">📷</span>Camera
     </button>
   </div>
 </div>
 
 <!-- CAMERA SCREEN -->
-<div class="screen" id="screen-camera">
+<div class="screen active" id="screen-camera">
   <div id="camera-view" style="position:relative;flex:1;overflow:hidden;background:#000">
     <video id="camera-video" autoplay playsinline muted></video>
     <div class="flash" id="camera-flash"></div>
@@ -946,6 +946,7 @@ function toast(msg) {
    ============================================================ */
 loadGallery();
 if (!uploaderName) setTimeout(showNameModal, 500);
+startCamera();
 
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'A') triggerAdminPanel();
