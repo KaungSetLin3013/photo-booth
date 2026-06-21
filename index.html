@@ -24,7 +24,6 @@ html,body{height:100%;overflow:hidden;background:var(--film)}
 body{font-family:'Special Elite',serif;color:var(--cream);display:flex;flex-direction:column;max-width:480px;margin:0 auto;position:relative}
 body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");opacity:0.5;pointer-events:none;z-index:999}
 
-/* ── Film strip header ── */
 .filmstrip{background:var(--film);border-bottom:3px solid #111;display:flex;align-items:center;flex-shrink:0;position:relative;overflow:hidden;height:56px}
 .sprockets{display:flex;flex-direction:column;justify-content:space-around;padding:6px 4px;gap:4px;height:100%;flex-shrink:0}
 .sprocket{width:10px;height:8px;background:var(--film);border:2px solid var(--olive);border-radius:2px}
@@ -34,17 +33,14 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .frame-counter{font-family:'VT323',monospace;font-size:28px;color:var(--orange);background:#0A0600;border:2px solid var(--olive);padding:2px 8px;margin-right:4px;min-width:52px;text-align:center;flex-shrink:0;text-shadow:0 0 8px var(--orange)}
 .admin-trigger{position:absolute;top:0;right:28px;width:50px;height:100%;cursor:default;z-index:10}
 
-/* ── Nav ── */
 .nav{display:flex;background:#120D06;border-bottom:2px solid #3A2510;flex-shrink:0}
 .nav-btn{flex:1;padding:10px 4px;border:none;background:transparent;color:var(--olive);font-family:'VT323',monospace;font-size:18px;letter-spacing:2px;cursor:pointer;border-bottom:3px solid transparent;transition:all 0.15s}
 .nav-btn.active{color:var(--orange);border-bottom-color:var(--orange);background:rgba(212,97,42,0.08)}
 
-/* ── Scroll area ── */
 .main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .tab-pane{display:none;min-height:100%}
 .tab-pane.active{display:block}
 
-/* ── Viewfinder ── */
 .viewfinder{position:relative;width:100%;aspect-ratio:3/4;background:#000;overflow:hidden}
 #video{width:100%;height:100%;object-fit:cover;display:none;filter:sepia(0.3) contrast(1.1)}
 .vf-overlay{position:absolute;inset:0;pointer-events:none;z-index:2}
@@ -55,19 +51,16 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 #captured-img{width:100%;height:100%;object-fit:cover;display:none;filter:sepia(0.25) contrast(1.05)}
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:10;transition:opacity 0.05s}
 
-/* ── Film data strip ── */
 .film-data{background:#0A0600;border-top:2px solid #2A1A08;border-bottom:2px solid #2A1A08;padding:4px 12px;display:flex;justify-content:space-between;align-items:center}
 .film-data span{font-family:'VT323',monospace;font-size:13px;color:var(--olive);letter-spacing:1px}
 .film-data .exp{color:var(--orange)}
 
-/* ── Name input ── */
 .name-wrap{padding:10px 14px;background:#120D06}
 .input-label{font-family:'VT323',monospace;font-size:13px;color:var(--olive);letter-spacing:2px;margin-bottom:4px}
 .retro-input{width:100%;background:transparent;border:none;border-bottom:2px solid var(--olive);color:var(--cream);font-family:'Special Elite',serif;font-size:16px;padding:6px 2px;outline:none;letter-spacing:1px;transition:border-color 0.2s}
 .retro-input:focus{border-bottom-color:var(--orange)}
 .retro-input::placeholder{color:var(--olive);opacity:0.6}
 
-/* ── Controls ── */
 .controls{padding:14px;background:#0A0600;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .ctrl-btn{background:#1E1208;border:2px solid var(--olive);color:var(--cream);font-family:'VT323',monospace;font-size:16px;letter-spacing:1px;padding:10px 16px;border-radius:4px;cursor:pointer;transition:all 0.15s;flex:1}
 .ctrl-btn:active{background:var(--olive);color:var(--film)}
@@ -75,7 +68,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .shutter:active{transform:scale(0.92)}
 .shutter.hidden{display:none}
 
-/* ── Upload button ── */
 .upload-row{padding:10px 14px;background:#0A0600}
 .upload-big-btn{width:100%;background:var(--orange);color:var(--film);border:none;font-family:'VT323',monospace;font-size:22px;letter-spacing:3px;padding:14px;cursor:pointer;border-radius:4px;transition:all 0.15s;display:none}
 .upload-big-btn:active{background:#B8511F;transform:scale(0.98)}
@@ -83,12 +75,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .file-upload-alt{text-align:center;padding:6px 0 4px;font-family:'VT323',monospace;font-size:14px;color:var(--olive);letter-spacing:1px}
 .file-upload-alt label{color:var(--orange);cursor:pointer;border-bottom:1px solid var(--orange)}
 
-/* ── Status ── */
 .status-tape{margin:10px 14px;padding:8px 12px;font-family:'VT323',monospace;font-size:16px;letter-spacing:1px;border-radius:2px;display:none;text-align:center}
 .status-tape.ok{background:#1A2E1A;color:#8BC98B;border:1px solid #2E5A2E;display:block}
 .status-tape.err{background:#2E1A1A;color:#C98B8B;border:1px solid #5A2E2E;display:block}
 
-/* ── Gallery ── */
 .gallery-pane{background:var(--film);min-height:100%}
 .gallery-toolbar{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #2A1A08}
 .gallery-toolbar span{font-family:'VT323',monospace;font-size:16px;color:var(--olive);letter-spacing:2px}
@@ -96,7 +86,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .refresh-btn{background:transparent;border:1px solid var(--olive);color:var(--olive);font-family:'VT323',monospace;font-size:14px;letter-spacing:1px;padding:5px 10px;cursor:pointer;border-radius:2px}
 .refresh-btn:active{background:var(--olive);color:var(--film)}
 
-/* ── Contact sheet ── */
 .contact-sheet{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:3px;background:#0A0600}
 .film-frame{position:relative;aspect-ratio:1;background:#111;overflow:hidden;cursor:pointer}
 .film-frame img{width:100%;height:100%;object-fit:cover;filter:sepia(0.2) contrast(1.05);transition:filter 0.2s}
@@ -105,11 +94,10 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .frame-info .fn{font-family:'VT323',monospace;font-size:12px;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .frame-info .ft{font-family:'VT323',monospace;font-size:10px;color:var(--olive)}
 .frame-num{position:absolute;top:3px;left:3px;font-family:'VT323',monospace;font-size:11px;color:var(--orange);background:rgba(0,0,0,0.6);padding:1px 4px}
-.del-x{position:absolute;top:3px;right:3px;background:#A0291A;color:#fff;border:none;width:22px;height:22px;border-radius:50%;font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;font-family:'VT323',monospace}
+.del-x{position:absolute;top:3px;right:3px;background:#A0291A;color:#fff;border:none;width:22px;height:22px;border-radius:50%;font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;font-family:'VT323',monospace;line-height:1}
 .admin-mode .del-x{display:flex}
-.gallery-empty{text-align:center;padding:60px 20px;font-family:'VT323',monospace;font-size:18px;color:var(--olive);letter-spacing:2px;grid-column:1/-1}
+.gallery-empty{text-align:center;padding:60px 20px;font-family:'VT323',monospace;font-size:18px;color:var(--olive);letter-spacing:2px;grid-column:1/-1;line-height:1.8}
 
-/* ── Lightbox ── */
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;align-items:center;justify-content:center;flex-direction:column;padding:20px}
 .lightbox.open{display:flex}
 .lightbox img{max-width:100%;max-height:70vh;object-fit:contain;border:3px solid var(--olive);filter:sepia(0.2)}
@@ -118,7 +106,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .ltime{font-family:'VT323',monospace;font-size:14px;color:var(--olive);margin-top:2px}
 .lightbox-close{position:absolute;top:16px;right:16px;background:transparent;border:2px solid var(--olive);color:var(--olive);width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;font-family:'VT323',monospace;display:flex;align-items:center;justify-content:center}
 
-/* ── QR ── */
 .qr-pane{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;padding:30px 20px;gap:20px;text-align:center}
 .qr-title{font-family:'VT323',monospace;font-size:32px;color:var(--orange);letter-spacing:4px}
 .qr-sub{font-family:'VT323',monospace;font-size:14px;color:var(--olive);letter-spacing:2px;line-height:1.8}
@@ -126,7 +113,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 #qr-box canvas,#qr-box img{display:block}
 .qr-url-txt{font-family:'VT323',monospace;font-size:13px;color:var(--olive);word-break:break-all;max-width:300px;line-height:1.6;margin-top:4px}
 
-/* ── Admin bar ── */
 .admin-bar{display:none;background:#1A0808;border-bottom:2px solid var(--red);padding:10px 14px;align-items:center;justify-content:space-between;gap:8px}
 .admin-bar.on{display:flex}
 .admin-bar span{font-family:'VT323',monospace;font-size:15px;color:#C98B8B;letter-spacing:1px}
@@ -134,7 +120,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 .adm-btn{background:transparent;border:1px solid var(--red);color:#C98B8B;font-family:'VT323',monospace;font-size:14px;letter-spacing:1px;padding:5px 10px;cursor:pointer;border-radius:2px}
 .adm-btn:active{background:var(--red);color:#fff}
 
-/* ── Admin modal ── */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:center;justify-content:center}
 .modal-bg.open{display:flex}
 .modal-box{background:#1E1208;border:2px solid var(--olive);border-radius:4px;padding:28px 22px;width:88%;max-width:340px}
@@ -157,7 +142,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 </head>
 <body>
 
-<!-- Film strip header -->
 <div class="filmstrip">
   <div class="sprockets"><div class="sprocket"></div><div class="sprocket"></div><div class="sprocket"></div></div>
   <div class="film-title-area">
@@ -169,26 +153,22 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   <div class="admin-trigger" id="admin-trigger"></div>
 </div>
 
-<!-- Nav -->
 <div class="nav">
   <button class="nav-btn active" onclick="switchTab('camera')" id="nav-camera">[ SHOOT ]</button>
   <button class="nav-btn" onclick="switchTab('gallery')" id="nav-gallery">[ ROLL ]</button>
   <button class="nav-btn" onclick="switchTab('qr')" id="nav-qr">[ SHARE ]</button>
 </div>
 
-<!-- Admin bar -->
 <div class="admin-bar" id="admin-bar">
   <span>🔴 ADMIN MODE</span>
   <div class="admin-btns">
-    <button class="adm-btn" onclick="deleteAll()">PURGE ALL</button>
+    <button class="adm-btn" onclick="confirmPurge()">PURGE ALL</button>
     <button class="adm-btn" onclick="exitAdmin()">EXIT</button>
   </div>
 </div>
 
-<!-- Main -->
 <div class="main" id="main">
 
-  <!-- Camera tab -->
   <div class="tab-pane active" id="tab-camera">
     <div class="viewfinder">
       <video id="video" autoplay playsinline muted></video>
@@ -224,7 +204,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <div id="status-area"></div>
   </div>
 
-  <!-- Gallery tab -->
   <div class="tab-pane" id="tab-gallery">
     <div class="gallery-pane">
       <div class="gallery-toolbar">
@@ -237,7 +216,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     </div>
   </div>
 
-  <!-- QR tab -->
   <div class="tab-pane" id="tab-qr">
     <div class="qr-pane">
       <div class="qr-title">SCAN ME</div>
@@ -249,7 +227,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 
 </div>
 
-<!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close" onclick="closeLightbox()">✕</button>
   <img id="lightbox-img" src="" alt="">
@@ -259,7 +236,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   </div>
 </div>
 
-<!-- Admin modal -->
 <div class="modal-bg" id="admin-modal">
   <div class="modal-box">
     <h2>// ADMIN //</h2>
@@ -273,20 +249,21 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 </div>
 
 <script>
-// ── Cloudinary config (safe to be public — unsigned upload preset) ──
-const CL_CLOUD  = 'dk5y4iq6b';
-const CL_PRESET = 'photo-booth';
-const CL_FOLDER = 'photo-booth';
-const CL_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CL_CLOUD}/image/upload`;
-const CL_LIST_URL   = `https://res.cloudinary.com/${CL_CLOUD}/image/list/${CL_FOLDER}.json`;
+// ── Cloudinary config ────────────────────────────────────
+const CL_CLOUD   = 'dk5y4iq6b';
+const CL_KEY     = '141439111967732';
+const CL_SECRET  = 'uugLMyLJuNXVMYIkUWcR7G4zbME';
+const CL_PRESET  = 'photo-booth';
+const CL_FOLDER  = 'photo-booth';
+const ADMIN_PW   = 'kaungadmin2024';
 
-const ADMIN_PW = 'kaungadmin2024';
+// Base64 encode key:secret for Basic Auth
+const CL_AUTH = btoa(CL_KEY + ':' + CL_SECRET);
 
 let stream = null, capturedDataUrl = null, adminMode = false;
 let tapCount = 0, tapTimer = null, photoCount = 0;
 let galleryPhotos = [];
 
-// datestamp
 const now = new Date();
 document.getElementById('datestamp').textContent =
   String(now.getDate()).padStart(2,'0') + '/' +
@@ -299,7 +276,6 @@ document.getElementById('admin-trigger').addEventListener('click', () => {
   tapTimer = setTimeout(() => { tapCount = 0; }, 800);
   if (tapCount >= 3) { tapCount = 0; openAdminModal(); }
 });
-
 function openAdminModal() {
   document.getElementById('admin-modal').classList.add('open');
   document.getElementById('admin-pass').value = '';
@@ -326,7 +302,82 @@ function exitAdmin() {
   document.getElementById('contact-sheet').classList.remove('admin-mode');
 }
 
-// ── Cloudinary upload ─────────────────────────────────────
+// ── Cloudinary Search API (fetch gallery) ────────────────
+async function fetchPhotos() {
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CL_CLOUD}/resources/search`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + CL_AUTH,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        expression: `folder:${CL_FOLDER}`,
+        sort_by: [{ created_at: 'desc' }],
+        max_results: 200,
+        with_field: ['context', 'tags']
+      })
+    }
+  );
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error?.message || 'Gallery load failed (' + res.status + ')');
+  }
+  const data = await res.json();
+  return (data.resources || []).map(r => ({
+    url: r.secure_url,
+    publicId: r.public_id,
+    name: r.context?.custom?.photographer || 'Anonymous',
+    time: r.context?.custom?.shot_time    || formatDate(r.created_at),
+    created: r.created_at
+  }));
+}
+
+// ── Cloudinary Delete API ────────────────────────────────
+async function deleteFromCloudinary(publicId) {
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CL_CLOUD}/resources/image`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': 'Basic ' + CL_AUTH,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ public_ids: [publicId] })
+    }
+  );
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error?.message || 'Delete failed');
+  }
+  return res.json();
+}
+
+async function deletePhoto(publicId) {
+  if (!confirm('Delete this frame?')) return;
+  try {
+    await deleteFromCloudinary(publicId);
+    loadGallery();
+  } catch(e) { showStatus('DELETE FAILED: ' + e.message, 'err'); }
+}
+
+async function confirmPurge() {
+  if (!confirm('PURGE ALL PHOTOS? THIS CANNOT BE UNDONE.')) return;
+  const bar = document.getElementById('admin-bar').querySelector('span');
+  bar.textContent = '⏳ PURGING ALL...';
+  try {
+    const ids = galleryPhotos.map(p => p.publicId);
+    for (const id of ids) await deleteFromCloudinary(id);
+    bar.textContent = '✓ ALL PURGED';
+    updateCounter(0);
+    loadGallery();
+  } catch(e) {
+    bar.textContent = 'ERROR: ' + e.message;
+  }
+}
+
+// ── Cloudinary Upload ────────────────────────────────────
 function resizeImage(dataUrl, max) {
   return new Promise(resolve => {
     const img = new Image();
@@ -347,18 +398,16 @@ function resizeImage(dataUrl, max) {
 
 async function uploadToCloudinary(dataUrl, name) {
   const resized = await resizeImage(dataUrl, 1200);
+  const timeStr = formatDate(new Date().toISOString());
   const fd = new FormData();
   fd.append('file', resized);
   fd.append('upload_preset', CL_PRESET);
   fd.append('folder', CL_FOLDER);
-  // store name + time as context metadata
-  const timeStr = now.toLocaleString('en-GB', {
-    day:'numeric', month:'short', year:'numeric',
-    hour:'2-digit', minute:'2-digit'
-  });
   fd.append('context', `photographer=${name}|shot_time=${timeStr}`);
-
-  const res = await fetch(CL_UPLOAD_URL, { method: 'POST', body: fd });
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CL_CLOUD}/image/upload`,
+    { method: 'POST', body: fd }
+  );
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     throw new Error(e.error?.message || 'Upload failed');
@@ -366,29 +415,12 @@ async function uploadToCloudinary(dataUrl, name) {
   return res.json();
 }
 
-// ── Fetch gallery from Cloudinary ────────────────────────
-async function fetchPhotos() {
-  // Cloudinary resource list via signed URL is backend-only,
-  // so we use the public "list" tag URL (requires "list" tag on upload)
-  // Instead we use the Search API with unsigned preset — use tag approach
-  const res = await fetch(CL_LIST_URL + '?t=' + Date.now());
-  if (!res.ok) throw new Error('Could not load gallery');
-  const data = await res.json();
-  return (data.resources || []).map(r => ({
-    url: r.secure_url,
-    publicId: r.public_id,
-    name: r.context?.custom?.photographer || 'Anonymous',
-    time: r.context?.custom?.shot_time    || '',
-    created: r.created_at
-  })).sort((a, b) => new Date(b.created) - new Date(a.created));
-}
-
-// ── Admin delete (needs signed API — show instruction) ────
-async function deleteAll() {
-  alert('To delete photos, go to cloudinary.com → Media Library → photo-booth folder and delete from there.\n\nAdmin delete requires a backend for security.');
-}
-async function deletePhoto(publicId) {
-  alert('To delete this photo, go to cloudinary.com → Media Library → find the photo → delete.\n\nPublic ID: ' + publicId);
+function formatDate(isoStr) {
+  const d = new Date(isoStr);
+  return d.toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
 }
 
 // ── Camera ───────────────────────────────────────────────
@@ -517,14 +549,13 @@ async function loadGallery() {
     `).join('');
     if (isAdmin) sheet.classList.add('admin-mode');
   } catch(e) {
-    sheet.innerHTML = '<div class="gallery-empty">LOAD ERROR<br><span style="font-size:12px">' + escHtml(e.message) + '</span></div>';
+    sheet.innerHTML = `<div class="gallery-empty">LOAD ERROR<br><span style="font-size:12px;color:var(--red)">${escHtml(e.message)}</span></div>`;
   }
 }
 
 // ── Lightbox ─────────────────────────────────────────────
 function openLightbox(idx) {
-  const p = galleryPhotos[idx];
-  if (!p) return;
+  const p = galleryPhotos[idx]; if (!p) return;
   document.getElementById('lightbox-img').src = p.url;
   document.getElementById('lightbox-name').textContent = p.name;
   document.getElementById('lightbox-time').textContent = p.time;
