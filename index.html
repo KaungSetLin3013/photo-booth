@@ -388,6 +388,8 @@
 <script>
 const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
+const PLACEHOLDER_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const BUCKET_NAME = 'photos';
 const TABLE_NAME = 'photos';
 let ADMIN_PASSWORD = localStorage.getItem('adminPassword') || 'admin123';
@@ -540,7 +542,8 @@ function getConfig() {
 }
 function isConfigured() {
   const c = getConfig();
-  return c.url && c.url !== 'YOUR_SUPABASE_URL' && c.key && c.key !== 'YOUR_SUPABASE_ANON_KEY';
+  return c.url && c.url !== PLACEHOLDER_URL && c.url.includes('supabase.co') &&
+         c.key && c.key !== PLACEHOLDER_KEY && c.key.length > 10;
 }
 async function sbFetch(path, options = {}) {
   const { url, key } = getConfig();
@@ -569,7 +572,11 @@ async function uploadPhoto(blob, filename, caption) {
     headers: { 'apikey': key, 'Authorization': 'Bearer ' + key, 'Content-Type': blob.type },
     body: blob
   });
-  if (!uploadRes.ok) throw new Error('Upload failed');
+  if (!uploadRes.ok) {
+    const err = await uploadRes.text();
+    console.error('Storage error:', uploadRes.status, err);
+    throw new Error('Upload failed: ' + err);
+  }
   const publicUrl = `${url}/storage/v1/object/public/${BUCKET_NAME}/${path}`;
   const metaRes = await sbFetch(`/rest/v1/${TABLE_NAME}`, {
     method: 'POST',
