@@ -249,16 +249,19 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 </div>
 
 <script>
-// ── Cloudinary config ────────────────────────────────────
-const CL_CLOUD   = 'dk5y4iq6b';
-const CL_KEY     = '141439111967732';
-const CL_SECRET  = 'uugLMyLJuNXVMYIkUWcR7G4zbME';
-const CL_PRESET  = 'photo-booth';
-const CL_FOLDER  = 'photo-booth';
-const ADMIN_PW   = 'kaungadmin2024';
+// ── !! REPLACE THIS WITH YOUR TOKEN !! ──────────────────
+// Open this file in Notepad / VS Code
+// Find YOUR_TOKEN_HERE and replace with your real token
+// Save the file, then upload to GitHub (private repo only!)
+const GH_TOKEN = 'YOUR_TOKEN_HERE';
+// ────────────────────────────────────────────────────────
 
-// Base64 encode key:secret for Basic Auth
-const CL_AUTH = btoa(CL_KEY + ':' + CL_SECRET);
+const GH_USER   = 'KaungSetLin3013';
+const GH_REPO   = 'photo-booth';
+const GH_BRANCH = 'main';
+const PHOTOS_DIR = 'photos';
+const ADMIN_PW  = 'kaungadmin2024';
+const GH_API    = 'https://api.github.com/repos/' + GH_USER + '/' + GH_REPO;
 
 let stream = null, capturedDataUrl = null, adminMode = false;
 let tapCount = 0, tapTimer = null, photoCount = 0;
@@ -269,7 +272,135 @@ document.getElementById('datestamp').textContent =
   String(now.getDate()).padStart(2,'0') + '/' +
   String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear();
 
-// ── Admin trigger (triple-tap hidden zone) ───────────────
+// ── GitHub API helper ────────────────────────────────────
+async function ghReq(path, method = 'GET', body = null) {
+  const opts = {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + GH_TOKEN,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    }
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(GH_API + path, opts);
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.message || 'GitHub error ' + res.status);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// ── Ensure photos folder exists ──────────────────────────
+async function ensureFolder() {
+  try {
+    await ghReq('/contents/' + PHOTOS_DIR + '/.gitkeep');
+  } catch {
+    await ghReq('/contents/' + PHOTOS_DIR + '/.gitkeep', 'PUT', {
+      message: 'init photos folder',
+      content: btoa('')
+    });
+  }
+}
+
+// ── Upload photo + metadata to GitHub ───────────────────
+async function uploadToGitHub(dataUrl, name) {
+  await ensureFolder();
+  const b64  = await resizeImage(dataUrl, 1000);
+  const ts   = Date.now();
+  const safe = (name || 'anon').replace(/[^a-z0-9_-]/gi, '_').slice(0, 30);
+  const imgPath  = PHOTOS_DIR + '/' + ts + '_' + safe + '.jpg';
+  const metaPath = PHOTOS_DIR + '/' + ts + '_' + safe + '.json';
+  const timeStr  = now.toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+  const metaB64 = btoa(unescape(encodeURIComponent(JSON.stringify({
+    name: name || 'Anonymous',
+    time: timeStr
+  }))));
+  await ghReq('/contents/' + imgPath,  'PUT', { message: 'photo: ' + (name||'anon'), content: b64 });
+  await ghReq('/contents/' + metaPath, 'PUT', { message: 'meta: '  + (name||'anon'), content: metaB64 });
+}
+
+// ── Fetch gallery from GitHub ────────────────────────────
+async function fetchPhotos() {
+  const files   = await ghReq('/contents/' + PHOTOS_DIR);
+  const jFiles  = files.filter(f => f.name.endsWith('.json') && f.name !== '.gitkeep');
+  const iFiles  = files.filter(f => f.name.endsWith('.jpg'));
+  const photos  = [];
+  for (const jf of jFiles) {
+    const base  = jf.name.replace('.json', '');
+    const iFile = iFiles.find(f => f.name === base + '.jpg');
+    if (!iFile) continue;
+    const meta  = await fetch(jf.download_url).then(r => r.json());
+    photos.push({
+      imgUrl:   iFile.download_url,
+      name:     meta.name,
+      time:     meta.time,
+      imgName:  iFile.name,
+      imgSha:   iFile.sha,
+      metaName: jf.name,
+      metaSha:  jf.sha
+    });
+  }
+  return photos.reverse();
+}
+
+// ── Delete single photo ──────────────────────────────────
+async function deletePhoto(imgName, imgSha, metaName, metaSha) {
+  if (!confirm('Delete this frame?')) return;
+  try {
+    await ghReq('/contents/' + PHOTOS_DIR + '/' + imgName,  'DELETE', { message: 'delete photo', sha: imgSha });
+    await ghReq('/contents/' + PHOTOS_DIR + '/' + metaName, 'DELETE', { message: 'delete meta',  sha: metaSha });
+    loadGallery();
+  } catch(e) { showStatus('DELETE FAILED: ' + e.message, 'err'); }
+}
+
+// ── Purge all photos ─────────────────────────────────────
+async function confirmPurge() {
+  if (!confirm('PURGE ALL PHOTOS? THIS CANNOT BE UNDONE.')) return;
+  const bar = document.getElementById('admin-bar').querySelector('span');
+  bar.textContent = '⏳ PURGING...';
+  try {
+    const files = await ghReq('/contents/' + PHOTOS_DIR);
+    const toDelete = files.filter(f => f.name !== '.gitkeep');
+    for (const f of toDelete) {
+      await ghReq('/contents/' + PHOTOS_DIR + '/' + f.name, 'DELETE', {
+        message: 'admin purge', sha: f.sha
+      });
+    }
+    bar.textContent = '✓ ALL PURGED';
+    updateCounter(0); galleryPhotos = [];
+    loadGallery();
+  } catch(e) {
+    bar.textContent = 'ERROR: ' + e.message;
+  }
+}
+
+// ── Image resize ─────────────────────────────────────────
+function resizeImage(dataUrl, max) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > max || h > max) {
+        if (w > h) { h = Math.round(h * max / w); w = max; }
+        else       { w = Math.round(w * max / h); h = max; }
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ── Admin ────────────────────────────────────────────────
 document.getElementById('admin-trigger').addEventListener('click', () => {
   tapCount++;
   clearTimeout(tapTimer);
@@ -302,132 +433,12 @@ function exitAdmin() {
   document.getElementById('contact-sheet').classList.remove('admin-mode');
 }
 
-// ── Cloudinary Search API (fetch gallery) ────────────────
-async function fetchPhotos() {
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CL_CLOUD}/resources/search`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + CL_AUTH,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        expression: `folder:${CL_FOLDER}`,
-        sort_by: [{ created_at: 'desc' }],
-        max_results: 200,
-        with_field: ['context', 'tags']
-      })
-    }
-  );
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e.error?.message || 'Gallery load failed (' + res.status + ')');
-  }
-  const data = await res.json();
-  return (data.resources || []).map(r => ({
-    url: r.secure_url,
-    publicId: r.public_id,
-    name: r.context?.custom?.photographer || 'Anonymous',
-    time: r.context?.custom?.shot_time    || formatDate(r.created_at),
-    created: r.created_at
-  }));
-}
-
-// ── Cloudinary Delete API ────────────────────────────────
-async function deleteFromCloudinary(publicId) {
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CL_CLOUD}/resources/image`,
-    {
-      method: 'DELETE',
-      headers: {
-        'Authorization': 'Basic ' + CL_AUTH,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ public_ids: [publicId] })
-    }
-  );
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e.error?.message || 'Delete failed');
-  }
-  return res.json();
-}
-
-async function deletePhoto(publicId) {
-  if (!confirm('Delete this frame?')) return;
-  try {
-    await deleteFromCloudinary(publicId);
-    loadGallery();
-  } catch(e) { showStatus('DELETE FAILED: ' + e.message, 'err'); }
-}
-
-async function confirmPurge() {
-  if (!confirm('PURGE ALL PHOTOS? THIS CANNOT BE UNDONE.')) return;
-  const bar = document.getElementById('admin-bar').querySelector('span');
-  bar.textContent = '⏳ PURGING ALL...';
-  try {
-    const ids = galleryPhotos.map(p => p.publicId);
-    for (const id of ids) await deleteFromCloudinary(id);
-    bar.textContent = '✓ ALL PURGED';
-    updateCounter(0);
-    loadGallery();
-  } catch(e) {
-    bar.textContent = 'ERROR: ' + e.message;
-  }
-}
-
-// ── Cloudinary Upload ────────────────────────────────────
-function resizeImage(dataUrl, max) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      let w = img.width, h = img.height;
-      if (w > max || h > max) {
-        if (w > h) { h = Math.round(h * max / w); w = max; }
-        else       { w = Math.round(w * max / h); h = max; }
-      }
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(c.toDataURL('image/jpeg', 0.85));
-    };
-    img.src = dataUrl;
-  });
-}
-
-async function uploadToCloudinary(dataUrl, name) {
-  const resized = await resizeImage(dataUrl, 1200);
-  const timeStr = formatDate(new Date().toISOString());
-  const fd = new FormData();
-  fd.append('file', resized);
-  fd.append('upload_preset', CL_PRESET);
-  fd.append('folder', CL_FOLDER);
-  fd.append('context', `photographer=${name}|shot_time=${timeStr}`);
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${CL_CLOUD}/image/upload`,
-    { method: 'POST', body: fd }
-  );
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e.error?.message || 'Upload failed');
-  }
-  return res.json();
-}
-
-function formatDate(isoStr) {
-  const d = new Date(isoStr);
-  return d.toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-}
-
 // ── Camera ───────────────────────────────────────────────
 async function startCamera() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width:{ideal:1280}, height:{ideal:960} }, audio: false
+      video: { facingMode: 'environment', width:{ideal:1280}, height:{ideal:960} },
+      audio: false
     });
     const v = document.getElementById('video');
     v.srcObject = stream; v.style.display = 'block';
@@ -500,7 +511,7 @@ async function uploadPhoto() {
   btn.innerHTML = '<span class="spinner"></span>DEVELOPING...';
   document.getElementById('cam-mode').textContent = 'UPLOADING...';
   try {
-    await uploadToCloudinary(capturedDataUrl, name);
+    await uploadToGitHub(capturedDataUrl, name);
     btn.disabled = false; btn.textContent = 'DEVELOP →';
     showStatus('✓ FRAME DEVELOPED! CHECK THE ROLL.', 'ok');
     photoCount++; updateCounter(photoCount);
@@ -523,8 +534,8 @@ function updateCounter(n) {
 
 // ── Gallery ──────────────────────────────────────────────
 async function loadGallery() {
-  const sheet = document.getElementById('contact-sheet');
-  const badge = document.getElementById('count-badge');
+  const sheet   = document.getElementById('contact-sheet');
+  const badge   = document.getElementById('count-badge');
   const isAdmin = adminMode;
   sheet.innerHTML = '<div class="gallery-empty">LOADING ROLL...<br><span style="font-size:13px">REWINDING FILM</span></div>';
   try {
@@ -538,13 +549,13 @@ async function loadGallery() {
     }
     sheet.innerHTML = photos.map((p, i) => `
       <div class="film-frame" onclick="openLightbox(${i})">
-        <img src="${escAttr(p.url)}" alt="${escAttr(p.name)}" loading="lazy">
+        <img src="${escAttr(p.imgUrl)}" alt="${escAttr(p.name)}" loading="lazy">
         <div class="frame-num">${String(i+1).padStart(2,'0')}</div>
         <div class="frame-info">
           <div class="fn">${escHtml(p.name)}</div>
           <div class="ft">${escHtml(p.time)}</div>
         </div>
-        <button class="del-x" onclick="event.stopPropagation();deletePhoto('${escAttr(p.publicId)}')">✕</button>
+        <button class="del-x" onclick="event.stopPropagation();deletePhoto('${escAttr(p.imgName)}','${escAttr(p.imgSha)}','${escAttr(p.metaName)}','${escAttr(p.metaSha)}')">✕</button>
       </div>
     `).join('');
     if (isAdmin) sheet.classList.add('admin-mode');
@@ -556,7 +567,7 @@ async function loadGallery() {
 // ── Lightbox ─────────────────────────────────────────────
 function openLightbox(idx) {
   const p = galleryPhotos[idx]; if (!p) return;
-  document.getElementById('lightbox-img').src = p.url;
+  document.getElementById('lightbox-img').src = p.imgUrl;
   document.getElementById('lightbox-name').textContent = p.name;
   document.getElementById('lightbox-time').textContent = p.time;
   document.getElementById('lightbox').classList.add('open');
@@ -570,8 +581,12 @@ function setupQR() {
   document.getElementById('qr-url-txt').textContent = url;
   if (box.children.length) return;
   try {
-    new QRCode(box, { text: url, width: 200, height: 200, colorDark:'#2C1A0E', colorLight:'#F2E8D5', correctLevel: QRCode.CorrectLevel.M });
-  } catch { box.innerHTML = '<p style="color:var(--olive);padding:10px;font-family:VT323,monospace;font-size:13px">SHARE URL ABOVE</p>'; }
+    new QRCode(box, { text: url, width: 200, height: 200,
+      colorDark:'#2C1A0E', colorLight:'#F2E8D5',
+      correctLevel: QRCode.CorrectLevel.M });
+  } catch {
+    box.innerHTML = '<p style="color:var(--olive);padding:10px;font-family:VT323,monospace;font-size:13px">SHARE URL ABOVE</p>';
+  }
 }
 
 // ── Tabs ─────────────────────────────────────────────────
