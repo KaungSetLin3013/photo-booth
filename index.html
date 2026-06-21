@@ -386,13 +386,13 @@
 
 <!-- CONFIG — REPLACE THESE WITH YOUR SUPABASE DETAILS -->
 <script>
-const SUPABASE_URL = 'https://lkzcuhuxyporcgedbbuo.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_Os2lqYitPAzbVmXrl0ZlTg_JHbg7v5M';
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
 const PLACEHOLDER_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const BUCKET_NAME = 'photos';
 const TABLE_NAME = 'photos';
-let ADMIN_PASSWORD = localStorage.getItem('adminPassword') || 'admin123';
+let ADMIN_PASSWORD = null;
 let uploaderName = localStorage.getItem('uploaderName') || '';
 </script>
 
@@ -510,7 +510,7 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
   <div class="admin-scroll" id="admin-scroll">
     <div class="admin-section-title">Settings</div>
     <div class="settings-card">
-      <label>Change Admin Password</label>
+      <label>Change Admin Password (saved to Supabase)</label>
       <div class="settings-row">
         <input class="modal-input" id="new-pw-input" type="password" placeholder="New password">
         <button class="btn-save" style="flex:0 0 auto;padding:9px 14px" onclick="updatePassword()">Save</button>
@@ -563,6 +563,22 @@ async function loadPhotos() {
   const r = await sbFetch(`/rest/v1/${TABLE_NAME}?select=*&order=created_at.desc`);
   if (!r.ok) return [];
   return r.json();
+}
+async function loadAdminPassword() {
+  if (!isConfigured()) return 'admin123';
+  try {
+    const r = await sbFetch(`/rest/v1/settings?key=eq.admin_password&select=value`);
+    if (!r.ok) return 'admin123';
+    const rows = await r.json();
+    return rows[0]?.value || 'admin123';
+  } catch { return 'admin123'; }
+}
+async function saveAdminPasswordToDB(newPw) {
+  const r = await sbFetch(`/rest/v1/settings?key=eq.admin_password`, {
+    method: 'PATCH',
+    body: JSON.stringify({ value: newPw })
+  });
+  return r.ok;
 }
 async function uploadPhoto(blob, filename, caption) {
   const { url, key } = getConfig();
@@ -718,8 +734,12 @@ function triggerAdminPanel() {
 /* ============================================================
    ADMIN AUTH
    ============================================================ */
-function checkAdminPw() {
+async function checkAdminPw() {
   const input = document.getElementById('admin-pw-input').value;
+  const btn = document.querySelector('#admin-modal .btn-primary');
+  btn.textContent = 'Checking…'; btn.disabled = true;
+  if (!ADMIN_PASSWORD) ADMIN_PASSWORD = await loadAdminPassword();
+  btn.textContent = 'Unlock'; btn.disabled = false;
   if (input === ADMIN_PASSWORD) {
     closeAdminModal();
     showScreen('admin');
@@ -733,13 +753,20 @@ function closeAdminModal() {
   document.getElementById('admin-modal').classList.remove('open');
   document.getElementById('admin-pw-input').value = '';
 }
-function updatePassword() {
+async function updatePassword() {
   const v = document.getElementById('new-pw-input').value.trim();
   if (!v) { toast('Enter a password'); return; }
-  ADMIN_PASSWORD = v;
-  localStorage.setItem('adminPassword', v);
-  document.getElementById('new-pw-input').value = '';
-  toast('Password updated ✓');
+  const btn = document.querySelector('.btn-save[onclick="updatePassword()"]');
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+  const ok = await saveAdminPasswordToDB(v);
+  if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+  if (ok) {
+    ADMIN_PASSWORD = v;
+    document.getElementById('new-pw-input').value = '';
+    toast('Password updated in Supabase ✓');
+  } else {
+    toast('Failed — check Supabase settings table exists');
+  }
 }
 function saveSupabaseConfig() {
   const url = document.getElementById('sb-url-input').value.trim();
