@@ -351,6 +351,25 @@
   }
 
   .text-danger { color: var(--danger); }
+  .zoom-pill {
+    background: transparent; border: none;
+    color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
+    padding: 5px 11px; border-radius: 100px; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .zoom-pill.active {
+    background: rgba(255,255,255,0.22); color: #fff;
+  }
+  .filter-pill {
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.8); font-size: 12px; font-weight: 600;
+    padding: 6px 14px; border-radius: 100px; cursor: pointer;
+    white-space: nowrap; transition: all 0.15s; flex-shrink: 0;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .filter-pill.active {
+    background: var(--accent); color: #1a1a1a; border-color: var(--accent);
+  }
   .config-banner {
     margin: 0 16px 12px;
     background: rgba(255,79,79,0.12);
@@ -430,8 +449,8 @@ const DEVICE_ID = getDeviceId();
   <div class="header">
     <h1>Memo<span class="accent">ries</span></h1>
     <div style="display:flex;gap:8px">
-      <div class="header-btn" onclick="loadGallery()" title="Refresh">↻</div>
-      <div class="header-btn" onclick="triggerAdminPanel()" title="Admin panel" style="font-size:14px">⚙️</div>
+      <div class="header-btn" id="refresh-btn" title="Refresh">↻</div>
+      <div class="header-btn" id="admin-open-btn" title="Admin panel" style="font-size:14px">⚙️</div>
     </div>
   </div>
   <div id="config-warning" class="config-banner" style="display:none">
@@ -446,10 +465,10 @@ const DEVICE_ID = getDeviceId();
     </div>
   </div>
   <div class="bottom-nav">
-    <button class="nav-btn active" id="nav-gallery" onclick="showScreen('gallery')">
+    <button class="nav-btn active" id="nav-gallery">
       <span class="icon">🖼</span>Gallery
     </button>
-    <button class="nav-btn" id="nav-camera" onclick="showScreen('camera')">
+    <button class="nav-btn" id="nav-camera">
       <span class="icon">📷</span>Camera
     </button>
   </div>
@@ -458,58 +477,75 @@ const DEVICE_ID = getDeviceId();
 <!-- CAMERA SCREEN -->
 <div class="screen active" id="screen-camera">
   <div id="camera-view" style="position:relative;flex:1;overflow:hidden;background:#000">
-    <video id="camera-video" autoplay playsinline muted></video>
-    <div class="flash" id="camera-flash"></div>
+    <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
 
-    <!-- GRID OVERLAY -->
-    <div id="grid-overlay" style="display:none;position:absolute;inset:0;pointer-events:none;">
-      <svg width="100%" height="100%" style="position:absolute;inset:0">
-        <line x1="33.33%" y1="0" x2="33.33%" y2="100%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-        <line x1="66.66%" y1="0" x2="66.66%" y2="100%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-        <line x1="0" y1="33.33%" x2="100%" y2="33.33%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-        <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-      </svg>
+    <!-- FILM FILTER CANVAS (drawn over video) -->
+    <canvas id="filter-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0.92"></canvas>
+
+    <!-- CROP OVERLAY -->
+    <div id="crop-overlay" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
+      <div id="crop-box" style="position:relative;border:2px solid rgba(255,255,255,0.85);box-shadow:0 0 0 9999px rgba(0,0,0,0.45);transition:all 0.3s">
+        <!-- grid lines inside crop box -->
+        <div id="grid-lines" style="display:none;position:absolute;inset:0">
+          <div style="position:absolute;left:33.33%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
+          <div style="position:absolute;left:66.66%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
+          <div style="position:absolute;top:33.33%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
+          <div style="position:absolute;top:66.66%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
+        </div>
+        <!-- corner handles -->
+        <div style="position:absolute;top:-2px;left:-2px;width:16px;height:16px;border-top:3px solid #fff;border-left:3px solid #fff"></div>
+        <div style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-top:3px solid #fff;border-right:3px solid #fff"></div>
+        <div style="position:absolute;bottom:-2px;left:-2px;width:16px;height:16px;border-bottom:3px solid #fff;border-left:3px solid #fff"></div>
+        <div style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-bottom:3px solid #fff;border-right:3px solid #fff"></div>
+      </div>
     </div>
 
     <!-- TIMER COUNTDOWN -->
-    <div id="timer-display" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none;">
-      <span id="timer-count" style="font-size:96px;font-weight:800;color:#fff;text-shadow:0 0 30px rgba(0,0,0,0.8);opacity:0.9"></span>
+    <div id="timer-display" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none;z-index:10">
+      <span id="timer-count" style="font-size:96px;font-weight:800;color:#fff;text-shadow:0 0 30px rgba(0,0,0,0.8)"></span>
     </div>
 
-    <!-- TOP CONTROLS -->
-    <div style="position:absolute;top:0;left:0;right:0;padding:52px 16px 12px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,0.6) 0%,transparent 100%)">
-      <button class="cam-btn" onclick="toggleGrid()" id="grid-btn" title="Grid">⊞</button>
-      <div style="display:flex;gap:10px;align-items:center">
-        <button class="cam-btn" onclick="cycleTimer()" id="timer-btn" title="Timer" style="font-size:13px;font-weight:700;min-width:38px">⏱</button>
-        <button class="cam-btn" onclick="switchCamera()" title="Flip">🔄</button>
-      </div>
+    <!-- TOP BAR -->
+    <div style="position:absolute;top:0;left:0;right:0;padding:52px 16px 12px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,0.65) 0%,transparent 100%);z-index:5">
+      <button class="cam-btn" id="grid-btn">⊞</button>
+      <button class="cam-btn" id="timer-btn" style="font-size:13px;font-weight:700;min-width:38px">⏱</button>
     </div>
 
-    <!-- ZOOM SLIDER -->
-    <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px">
-      <span style="color:#fff;font-size:11px;font-weight:600" id="zoom-label">1×</span>
-      <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1"
-        style="writing-mode:vertical-lr;direction:rtl;width:28px;height:140px;accent-color:var(--accent);cursor:pointer;background:transparent"
-        oninput="applyZoom(this.value)">
+    <!-- ZOOM PILLS (iPhone style) -->
+    <div id="zoom-pills" style="position:absolute;bottom:200px;left:50%;transform:translateX(-50%);display:flex;gap:4px;background:rgba(0,0,0,0.45);border-radius:100px;padding:4px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:5">
+      <button class="zoom-pill active" id="pill-05">0.5×</button>
+      <button class="zoom-pill" id="pill-1">1×</button>
+      <button class="zoom-pill" id="pill-2">2×</button>
+      <button class="zoom-pill" id="pill-3">3×</button>
+    </div>
+
+    <!-- FILTER PILLS -->
+    <div id="filter-pills" style="position:absolute;bottom:155px;left:0;right:0;overflow-x:auto;display:flex;gap:6px;padding:0 16px;scrollbar-width:none;z-index:5;-webkit-overflow-scrolling:touch">
+      <button class="filter-pill active" id="fpill-film">🎞 Film</button>
+      <button class="filter-pill" id="fpill-warm">🌅 Warm</button>
+      <button class="filter-pill" id="fpill-fade">☁️ Fade</button>
+      <button class="filter-pill" id="fpill-vivid">🌈 Vivid</button>
+      <button class="filter-pill" id="fpill-bw">⬛ B&W</button>
+      <button class="filter-pill" id="fpill-none">✕ None</button>
     </div>
 
     <!-- BOTTOM CONTROLS -->
-    <div style="position:absolute;bottom:0;left:0;right:0;padding:0 0 20px;background:linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 100%)">
-      <div style="padding:0 20px 14px">
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:0 0 20px;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 100%);z-index:5">
+      <div style="padding:0 20px 12px">
         <input class="caption-input" id="caption-input" type="text" placeholder="Add a caption… (optional)" maxlength="120">
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-around;padding:0 32px">
-        <button class="cam-btn" onclick="switchCamera()" title="Flip">🔄</button>
-        <button class="shutter-btn" onclick="takePhoto()" id="shutter-btn">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 32px">
+        <button class="cam-btn" id="ratio-btn" style="font-size:12px;font-weight:700;color:var(--accent);border-color:var(--accent);min-width:44px">4:3</button>
+        <button class="shutter-btn" id="shutter-btn">
           <div class="shutter-inner"></div>
         </button>
-        <button class="cam-btn" style="font-size:13px;font-weight:700;color:var(--accent);border-color:var(--accent)" id="ratio-btn" onclick="cycleRatio()">4:3</button>
+        <button class="cam-btn" id="flip-btn">🔄</button>
       </div>
     </div>
   </div>
 
   <div class="bottom-nav">
-    <button class="nav-btn" id="nav-gallery2" onclick="showScreen('gallery')">
+    <button class="nav-btn" id="nav-gallery2">
       <span class="icon">🖼</span>Gallery
     </button>
     <button class="nav-btn active" id="nav-camera2">
@@ -951,63 +987,78 @@ async function confirmDelete(id, url) {
    ============================================================ */
 let stream = null, facingMode = 'environment', canvas;
 let currentZoom = 1, timerSeconds = 0, gridOn = false, timerRunning = false;
-let currentRatio = '4:3';
-const ratios = ['4:3', '16:9', '1:1'];
+let currentRatio = '4:3', currentFilter = 'film';
+let filterAnimFrame = null, ratioIndex = 0;
+const RATIOS_DISPLAY = ['4:3','16:9','1:1','3:2','2:3'];
+const ratioMap = { '4:3':4/3, '16:9':16/9, '1:1':1, '3:2':3/2, '2:3':2/3 };
 
 async function startCamera() {
   const video = document.getElementById('camera-video');
   if (stream) { stream.getTracks().forEach(t => t.stop()); }
+  if (filterAnimFrame) { cancelAnimationFrame(filterAnimFrame); filterAnimFrame = null; }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false
+      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false
     });
     video.srcObject = stream;
-    currentZoom = 1;
-    document.getElementById('zoom-slider').value = 1;
-    document.getElementById('zoom-label').textContent = '1×';
-    applyZoom(1);
-  } catch (e) {
-    toast('Camera not available on this device');
-  }
+    video.onloadedmetadata = () => { updateCropBox(); startFilterLoop(); };
+    currentZoom = 1; setActivePill('pill-1'); applyZoom(1);
+  } catch (e) { toast('Camera not available on this device'); }
 }
 
-function switchCamera() {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  startCamera();
-}
+function switchCamera() { facingMode = facingMode === 'environment' ? 'user' : 'environment'; startCamera(); }
 
+/* ---- ZOOM ---- */
+function setZoomPreset(val, pillId) { currentZoom = val; setActivePill(pillId); applyZoom(val); }
+function setActivePill(id) {
+  document.querySelectorAll('.zoom-pill').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById(id); if (el) el.classList.add('active');
+}
 function applyZoom(val) {
   currentZoom = parseFloat(val);
-  document.getElementById('zoom-label').textContent = currentZoom.toFixed(1) + '×';
-  const video = document.getElementById('camera-video');
-  // Try native zoom via track constraints first
   if (stream) {
     const track = stream.getVideoTracks()[0];
     if (track) {
       const caps = track.getCapabilities?.() || {};
       if (caps.zoom) {
-        const min = caps.zoom.min || 1;
-        const max = caps.zoom.max || 5;
-        const clamped = Math.min(Math.max(currentZoom, min), max);
-        track.applyConstraints({ advanced: [{ zoom: clamped }] }).catch(() => {});
+        track.applyConstraints({ advanced: [{ zoom: Math.min(Math.max(currentZoom, caps.zoom.min||1), caps.zoom.max||5) }] }).catch(()=>{});
         return;
       }
     }
   }
-  // CSS zoom fallback
-  video.style.transform = `scale(${currentZoom})`;
+  const video = document.getElementById('camera-video');
+  video.style.transform = `scale(${Math.max(currentZoom, 1)})`;
   video.style.transformOrigin = 'center center';
 }
 
+/* ---- CROP ---- */
+function cycleRatio() {
+  ratioIndex = (ratioIndex + 1) % RATIOS_DISPLAY.length;
+  currentRatio = RATIOS_DISPLAY[ratioIndex];
+  document.getElementById('ratio-btn').textContent = currentRatio;
+  updateCropBox();
+}
+function updateCropBox() {
+  const view = document.getElementById('camera-view');
+  const box  = document.getElementById('crop-box');
+  if (!box) return;
+  const vw = view.clientWidth, vh = view.clientHeight;
+  const ar = ratioMap[currentRatio] || 4/3;
+  let bw, bh;
+  if (ar >= 1) { bw = Math.min(vw * 0.92, vh * 0.72 * ar); bh = bw / ar; }
+  else          { bh = Math.min(vh * 0.72, vw * 0.92 / ar); bw = bh * ar; }
+  box.style.width = Math.round(bw) + 'px'; box.style.height = Math.round(bh) + 'px';
+}
+
+/* ---- GRID ---- */
 function toggleGrid() {
   gridOn = !gridOn;
-  document.getElementById('grid-overlay').style.display = gridOn ? 'block' : 'none';
+  document.getElementById('grid-lines').style.display = gridOn ? 'block' : 'none';
   document.getElementById('grid-btn').style.color = gridOn ? 'var(--accent)' : '#fff';
 }
 
-const timerOptions = [0, 3, 5, 10];
-let timerIndex = 0;
+/* ---- TIMER ---- */
+const timerOptions = [0, 3, 5, 10]; let timerIndex = 0;
 function cycleTimer() {
   timerIndex = (timerIndex + 1) % timerOptions.length;
   timerSeconds = timerOptions[timerIndex];
@@ -1016,73 +1067,111 @@ function cycleTimer() {
   btn.style.color = timerSeconds > 0 ? 'var(--accent)' : '#fff';
 }
 
-let ratioIndex = 0;
-function cycleRatio() {
-  ratioIndex = (ratioIndex + 1) % ratios.length;
-  currentRatio = ratios[ratioIndex];
-  document.getElementById('ratio-btn').textContent = currentRatio;
+/* ---- FILTER CANVAS ---- */
+function setFilter(name, pillId) {
+  currentFilter = name;
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById(pillId); if (el) el.classList.add('active');
+}
+function startFilterLoop() {
+  const video = document.getElementById('camera-video');
+  const fc = document.getElementById('filter-canvas');
+  const ctx = fc.getContext('2d');
+  function tick() {
+    if (!stream) return;
+    fc.width = video.videoWidth || video.clientWidth;
+    fc.height = video.videoHeight || video.clientHeight;
+    if (currentFilter === 'none') { ctx.clearRect(0,0,fc.width,fc.height); filterAnimFrame = requestAnimationFrame(tick); return; }
+    ctx.drawImage(video, 0, 0, fc.width, fc.height);
+    const W = fc.width, H = fc.height;
+    const id = ctx.getImageData(0, 0, W, H); const d = id.data;
+    if (currentFilter === 'film') {
+      for (let i = 0; i < d.length; i += 4) {
+        const noise = (Math.random()-0.5)*18;
+        d[i]   = Math.min(255,Math.max(0, d[i]  *0.82+22+noise));
+        d[i+1] = Math.min(255,Math.max(0, d[i+1]*0.82+18+noise*0.8));
+        d[i+2] = Math.min(255,Math.max(0, d[i+2]*0.85+28+noise*0.6));
+      }
+    } else if (currentFilter === 'warm') {
+      for (let i = 0; i < d.length; i += 4) { d[i]=Math.min(255,d[i]*1.12+15); d[i+1]=Math.min(255,d[i+1]*1.02+5); d[i+2]=Math.min(255,d[i+2]*0.88); }
+    } else if (currentFilter === 'fade') {
+      for (let i = 0; i < d.length; i += 4) { d[i]=d[i]*0.78+40; d[i+1]=d[i+1]*0.78+38; d[i+2]=d[i+2]*0.80+42; }
+    } else if (currentFilter === 'vivid') {
+      for (let i = 0; i < d.length; i += 4) { const a=(d[i]+d[i+1]+d[i+2])/3; d[i]=Math.min(255,a+(d[i]-a)*1.6); d[i+1]=Math.min(255,a+(d[i+1]-a)*1.6); d[i+2]=Math.min(255,a+(d[i+2]-a)*1.6); }
+    } else if (currentFilter === 'bw') {
+      for (let i = 0; i < d.length; i += 4) { const l=d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114; d[i]=d[i+1]=d[i+2]=l; }
+    }
+    ctx.putImageData(id, 0, 0);
+    if (currentFilter === 'film' || currentFilter === 'fade') {
+      const g = ctx.createRadialGradient(W/2,H/2,H*0.25,W/2,H/2,H*0.75);
+      g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,0.42)');
+      ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    }
+    filterAnimFrame = requestAnimationFrame(tick);
+  }
+  filterAnimFrame = requestAnimationFrame(tick);
 }
 
+/* ---- SHOOT ---- */
 async function takePhoto() {
   if (!stream) { toast('Camera not available'); return; }
   if (!isConfigured()) { toast('Configure Supabase first'); return; }
   if (!uploaderName) { showNameModal(); return; }
   if (timerRunning) return;
-
   if (timerSeconds > 0) {
     timerRunning = true;
     const display = document.getElementById('timer-display');
     const count = document.getElementById('timer-count');
-    display.style.display = 'flex';
-    let t = timerSeconds;
-    count.textContent = t;
-    const interval = setInterval(() => {
-      t--;
-      if (t <= 0) {
-        clearInterval(interval);
-        display.style.display = 'none';
-        timerRunning = false;
-        captureFrame();
-      } else {
-        count.textContent = t;
-      }
+    display.style.display = 'flex'; let t = timerSeconds; count.textContent = t;
+    const iv = setInterval(() => {
+      t--; if (t <= 0) { clearInterval(iv); display.style.display = 'none'; timerRunning = false; captureFrame(); }
+      else count.textContent = t;
     }, 1000);
-  } else {
-    captureFrame();
-  }
+  } else { captureFrame(); }
 }
 
 function captureFrame() {
   const video = document.getElementById('camera-video');
+  const fc = document.getElementById('filter-canvas');
   if (!canvas) canvas = document.createElement('canvas');
-
-  // Apply ratio crop
-  const vw = video.videoWidth || 1280;
-  const vh = video.videoHeight || 720;
-  let cw = vw, ch = vh;
-  if (currentRatio === '1:1') { cw = Math.min(vw, vh); ch = cw; }
-  else if (currentRatio === '16:9') { ch = Math.round(vw * 9/16); if (ch > vh) { ch = vh; cw = Math.round(vh * 16/9); } }
-  else { ch = Math.round(vw * 3/4); if (ch > vh) { ch = vh; cw = Math.round(vh * 4/3); } }
-  const ox = (vw - cw) / 2, oy = (vh - ch) / 2;
-
-  canvas.width = cw; canvas.height = ch;
-  const ctx = canvas.getContext('2d');
-  if (facingMode === 'user') {
-    ctx.translate(cw, 0); ctx.scale(-1, 1);
-  }
-  ctx.drawImage(video, ox, oy, cw, ch, 0, 0, cw, ch);
-
-  const flash = document.getElementById('camera-flash');
-  flash.classList.add('go');
-  setTimeout(() => flash.classList.remove('go'), 150);
-
-  const caption = document.getElementById('caption-input').value.trim();
-  document.getElementById('caption-input').value = '';
-
-  canvas.toBlob(async blob => {
-    await doUpload(blob, 'photo.jpg', caption);
-  }, 'image/jpeg', 0.9);
+  const vw = video.videoWidth||1280, vh = video.videoHeight||720;
+  const ar = ratioMap[currentRatio]||4/3;
+  let cw, ch;
+  if (ar>=1) { cw=vw; ch=Math.round(vw/ar); if(ch>vh){ch=vh;cw=Math.round(vh*ar);} }
+  else        { ch=vh; cw=Math.round(vh*ar); if(cw>vw){cw=vw;ch=Math.round(vw/ar);} }
+  const ox=(vw-cw)/2, oy=(vh-ch)/2;
+  canvas.width=cw; canvas.height=ch;
+  const ctx=canvas.getContext('2d');
+  if (facingMode==='user') { ctx.translate(cw,0); ctx.scale(-1,1); }
+  if (currentFilter==='none') { ctx.drawImage(video,ox,oy,cw,ch,0,0,cw,ch); }
+  else { const scX=fc.width/vw, scY=fc.height/vh; ctx.drawImage(fc,ox*scX,oy*scY,cw*scX,ch*scY,0,0,cw,ch); }
+  // Flash
+  const fDiv=document.createElement('div');
+  fDiv.style.cssText='position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20;transition:opacity 0.08s';
+  document.getElementById('camera-view').appendChild(fDiv);
+  requestAnimationFrame(()=>{ fDiv.style.opacity='1'; setTimeout(()=>{ fDiv.style.opacity='0'; setTimeout(()=>fDiv.remove(),200); },80); });
+  const caption=document.getElementById('caption-input').value.trim();
+  document.getElementById('caption-input').value='';
+  canvas.toBlob(async blob => { await doUpload(blob,'photo.jpg',caption); },'image/jpeg',0.92);
 }
+
+/* ---- PINCH ZOOM ---- */
+let pinchStartDist=0, pinchStartZoom=1;
+document.getElementById('camera-view').addEventListener('touchstart',e=>{
+  if(e.touches.length===2){ pinchStartDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); pinchStartZoom=currentZoom; }
+},{passive:true});
+document.getElementById('camera-view').addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const nz=Math.min(5,Math.max(0.5,pinchStartZoom*(dist/pinchStartDist)));
+    currentZoom=nz;
+    const presets=[{v:0.5,id:'pill-05'},{v:1,id:'pill-1'},{v:2,id:'pill-2'},{v:3,id:'pill-3'}];
+    setActivePill(presets.reduce((a,b)=>Math.abs(b.v-nz)<Math.abs(a.v-nz)?b:a).id);
+    applyZoom(nz);
+  }
+},{passive:true});
+window.addEventListener('resize', updateCropBox);
+
 async function doUpload(blob, filename, caption) {
   // Load limit if not yet loaded
   if (PHOTO_LIMIT === null) PHOTO_LIMIT = await loadPhotoLimit();
@@ -1139,47 +1228,71 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
 }
 
+function scrollToConfig() {
+  showScreen('admin');
+  setTimeout(() => {
+    const scroll = document.getElementById('admin-scroll');
+    if (scroll) scroll.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 300);
+}
+
 /* ============================================================
    INIT
    ============================================================ */
-loadGallery();
-startCamera();
-if (!uploaderName) {
-  setTimeout(showNameModal, 500);
-} else {
-  // Already have a name — register device silently
-  registerOrUpdateDevice().then(() => {
-    loadPhotoLimit().then(l => { PHOTO_LIMIT = l; });
+(async () => {
+  // Nav
+  document.getElementById('nav-gallery').addEventListener('click', () => showScreen('gallery'));
+  document.getElementById('nav-camera').addEventListener('click',  () => showScreen('camera'));
+  document.getElementById('nav-gallery2').addEventListener('click', () => showScreen('gallery'));
+
+  // Gallery header
+  document.getElementById('refresh-btn').addEventListener('click', loadGallery);
+  document.getElementById('admin-open-btn').addEventListener('click', triggerAdminPanel);
+
+  // Camera controls
+  document.getElementById('grid-btn').addEventListener('click', toggleGrid);
+  document.getElementById('timer-btn').addEventListener('click', cycleTimer);
+  document.getElementById('ratio-btn').addEventListener('click', cycleRatio);
+  document.getElementById('shutter-btn').addEventListener('click', takePhoto);
+  document.getElementById('flip-btn').addEventListener('click', switchCamera);
+
+  // Zoom pills
+  document.getElementById('pill-05').addEventListener('click', () => setZoomPreset(0.5, 'pill-05'));
+  document.getElementById('pill-1').addEventListener('click',  () => setZoomPreset(1,   'pill-1'));
+  document.getElementById('pill-2').addEventListener('click',  () => setZoomPreset(2,   'pill-2'));
+  document.getElementById('pill-3').addEventListener('click',  () => setZoomPreset(3,   'pill-3'));
+
+  // Filter pills
+  document.getElementById('fpill-film').addEventListener('click',  () => setFilter('film',  'fpill-film'));
+  document.getElementById('fpill-warm').addEventListener('click',  () => setFilter('warm',  'fpill-warm'));
+  document.getElementById('fpill-fade').addEventListener('click',  () => setFilter('fade',  'fpill-fade'));
+  document.getElementById('fpill-vivid').addEventListener('click', () => setFilter('vivid', 'fpill-vivid'));
+  document.getElementById('fpill-bw').addEventListener('click',   () => setFilter('bw',    'fpill-bw'));
+  document.getElementById('fpill-none').addEventListener('click',  () => setFilter('none',  'fpill-none'));
+
+  // Lightbox
+  document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+
+  // Admin modal
+  document.getElementById('admin-pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkAdminPw(); });
+  document.getElementById('admin-close-btn')?.addEventListener('click', () => showScreen('gallery'));
+
+  // Keyboard shortcut
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') triggerAdminPanel();
   });
-}
 
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'A') triggerAdminPanel();
-});
+  // Start
+  loadGallery();
+  startCamera();
+  if (!uploaderName) {
+    setTimeout(showNameModal, 500);
+  } else {
+    await registerOrUpdateDevice();
+    PHOTO_LIMIT = await loadPhotoLimit();
+  }
+})();
 
-// Pinch to zoom
-let pinchStartDist = 0, pinchStartZoom = 1;
-const camView = document.getElementById('camera-view');
-camView.addEventListener('touchstart', e => {
-  if (e.touches.length === 2) {
-    pinchStartDist = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    pinchStartZoom = currentZoom;
-  }
-}, { passive: true });
-camView.addEventListener('touchmove', e => {
-  if (e.touches.length === 2) {
-    const dist = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    const newZoom = Math.min(5, Math.max(1, pinchStartZoom * (dist / pinchStartDist)));
-    document.getElementById('zoom-slider').value = newZoom;
-    applyZoom(newZoom);
-  }
-}, { passive: true });
 </script>
 </body>
 </html>
