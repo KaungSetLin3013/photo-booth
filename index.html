@@ -194,24 +194,6 @@
   }
   .caption-input::placeholder { color: rgba(255,255,255,0.5); }
 
-  /* FILE UPLOAD FALLBACK */
-  .upload-fallback {
-    position: absolute; inset: 0;
-    background: var(--surface);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 20px;
-    padding: 40px;
-  }
-  .upload-fallback .big-icon { font-size: 64px; color: var(--accent); }
-  .upload-fallback p { color: var(--text-muted); font-size: 14px; text-align: center; line-height: 1.6; }
-  #file-input { display: none; }
-  .upload-label {
-    background: var(--accent); color: #1a1a1a;
-    font-weight: 700; font-size: 15px;
-    padding: 14px 32px; border-radius: 100px;
-    cursor: pointer; user-select: none;
-  }
-
   /* UPLOADER NAME MODAL */
   .modal-overlay {
     display: none; position: fixed; inset: 0; z-index: 100;
@@ -369,17 +351,25 @@
   }
 
   .text-danger { color: var(--danger); }
-  .config-banner {
-    margin: 0 16px 12px;
-    background: rgba(255,79,79,0.12);
-    border: 1px solid rgba(255,79,79,0.3);
-    border-radius: 10px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: #ff9090;
-    line-height: 1.5;
+  .zoom-pill {
+    background: transparent; border: none;
+    color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600;
+    padding: 5px 11px; border-radius: 100px; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
   }
-  .config-banner a { color: var(--accent); text-decoration: none; }
+  .zoom-pill.active {
+    background: rgba(255,255,255,0.22); color: #fff;
+  }
+  .filter-pill {
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.8); font-size: 12px; font-weight: 600;
+    padding: 6px 14px; border-radius: 100px; cursor: pointer;
+    white-space: nowrap; transition: all 0.15s; flex-shrink: 0;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .filter-pill.active {
+    background: var(--accent); color: #1a1a1a; border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -394,6 +384,19 @@ const BUCKET_NAME = 'photos';
 const TABLE_NAME = 'photos';
 let ADMIN_PASSWORD = null;
 let uploaderName = localStorage.getItem('uploaderName') || '';
+let PHOTO_LIMIT = null; // loaded from DB
+let devicePhotoCount = 0;
+
+// Generate or retrieve a persistent device ID
+function getDeviceId() {
+  let id = localStorage.getItem('device_id');
+  if (!id) {
+    id = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('device_id', id);
+  }
+  return id;
+}
+const DEVICE_ID = getDeviceId();
 </script>
 
 <!-- PROGRESS BAR -->
@@ -435,12 +438,9 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
   <div class="header">
     <h1>Memo<span class="accent">ries</span></h1>
     <div style="display:flex;gap:8px">
-      <div class="header-btn" onclick="loadGallery()" title="Refresh">↻</div>
-      <div class="header-btn" onclick="triggerAdminPanel()" title="Admin panel" style="font-size:14px">⚙️</div>
+      <div class="header-btn" id="refresh-btn" title="Refresh">↻</div>
+      <div class="header-btn" id="admin-open-btn" title="Admin panel" style="font-size:14px">⚙️</div>
     </div>
-  </div>
-  <div id="config-warning" class="config-banner" style="display:none">
-    ⚠️ Supabase not configured. <a href="#" onclick="scrollToConfig()">Open admin panel</a> or edit the HTML to add your keys.
   </div>
   <div class="pull-hint"><span>↓ Pull down 5 seconds for admin panel</span></div>
   <div class="gallery-scroll" id="gallery-scroll">
@@ -451,13 +451,10 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
     </div>
   </div>
   <div class="bottom-nav">
-    <button class="nav-btn" onclick="showScreen('gallery')">
+    <button class="nav-btn active" id="nav-gallery">
       <span class="icon">🖼</span>Gallery
     </button>
-    <button class="nav-btn capture-btn" onclick="showScreen('camera')">
-      <div class="capture-ring"><div class="capture-inner"></div></div>
-    </button>
-    <button class="nav-btn active" onclick="showScreen('camera')">
+    <button class="nav-btn" id="nav-camera">
       <span class="icon">📷</span>Camera
     </button>
   </div>
@@ -466,36 +463,75 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
 <!-- CAMERA SCREEN -->
 <div class="screen active" id="screen-camera">
   <div id="camera-view" style="position:relative;flex:1;overflow:hidden;background:#000">
-    <video id="camera-video" autoplay playsinline muted></video>
-    <div class="flash" id="camera-flash"></div>
-    <div class="camera-overlay">
-      <div class="camera-caption-area">
-        <input class="caption-input" id="caption-input" type="text" placeholder="Add a caption... (optional)" maxlength="120">
+    <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+
+    <!-- FILM FILTER CANVAS (drawn over video) -->
+    <!-- CROP OVERLAY -->
+    <div id="crop-overlay" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
+      <div id="crop-box" style="position:relative;border:2px solid rgba(255,255,255,0.85);box-shadow:0 0 0 9999px rgba(0,0,0,0.45);transition:all 0.3s">
+        <!-- grid lines inside crop box -->
+        <div id="grid-lines" style="display:none;position:absolute;inset:0">
+          <div style="position:absolute;left:33.33%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
+          <div style="position:absolute;left:66.66%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
+          <div style="position:absolute;top:33.33%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
+          <div style="position:absolute;top:66.66%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
+        </div>
+        <!-- corner handles -->
+        <div style="position:absolute;top:-2px;left:-2px;width:16px;height:16px;border-top:3px solid #fff;border-left:3px solid #fff"></div>
+        <div style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-top:3px solid #fff;border-right:3px solid #fff"></div>
+        <div style="position:absolute;bottom:-2px;left:-2px;width:16px;height:16px;border-bottom:3px solid #fff;border-left:3px solid #fff"></div>
+        <div style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-bottom:3px solid #fff;border-right:3px solid #fff"></div>
       </div>
-      <div style="height:20px"></div>
-      <div class="camera-controls">
-        <button class="cam-btn" onclick="switchCamera()" title="Flip camera">🔄</button>
-        <button class="shutter-btn" onclick="takePhoto()" id="shutter-btn">
+    </div>
+
+    <!-- TIMER COUNTDOWN -->
+    <div id="timer-display" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none;z-index:10">
+      <span id="timer-count" style="font-size:96px;font-weight:800;color:#fff;text-shadow:0 0 30px rgba(0,0,0,0.8)"></span>
+    </div>
+
+    <!-- TOP BAR -->
+    <div style="position:absolute;top:0;left:0;right:0;padding:52px 16px 12px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(to bottom,rgba(0,0,0,0.65) 0%,transparent 100%);z-index:5">
+      <button class="cam-btn" id="grid-btn">⊞</button>
+      <button class="cam-btn" id="timer-btn" style="font-size:13px;font-weight:700;min-width:38px">⏱</button>
+    </div>
+
+    <!-- ZOOM TICK BAR + PILLS -->
+    <div style="position:absolute;bottom:170px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:10px;z-index:5">
+      <!-- Tick ruler -->
+      <div id="zoom-ruler" style="position:relative;width:220px;height:28px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden">
+        <canvas id="zoom-tick-canvas" width="220" height="28" style="position:absolute;inset:0"></canvas>
+        <!-- center indicator -->
+        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:2px;height:14px;background:var(--accent);border-radius:1px"></div>
+      </div>
+      <!-- Zoom pills -->
+      <div style="display:flex;gap:4px;background:rgba(0,0,0,0.45);border-radius:100px;padding:4px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)">
+        <button class="zoom-pill" id="pill-05">0.5×</button>
+        <button class="zoom-pill active" id="pill-1">1×</button>
+        <button class="zoom-pill" id="pill-2">2×</button>
+        <button class="zoom-pill" id="pill-3">3×</button>
+      </div>
+    </div>
+
+    <!-- BOTTOM CONTROLS -->
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:0 0 20px;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 100%);z-index:5">
+      <div style="padding:0 20px 12px">
+        <input class="caption-input" id="caption-input" type="text" placeholder="Add a caption… (optional)" maxlength="120">
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 32px">
+        <button class="cam-btn" id="ratio-btn" style="font-size:12px;font-weight:700;color:var(--accent);border-color:var(--accent);min-width:44px">4:3</button>
+        <button class="shutter-btn" id="shutter-btn">
           <div class="shutter-inner"></div>
         </button>
-        <button class="cam-btn" onclick="showScreen('gallery')" title="Gallery">🖼</button>
+        <button class="cam-btn" id="flip-btn">🔄</button>
       </div>
     </div>
   </div>
-  <div id="fallback-view" class="upload-fallback" style="display:none">
-    <div class="big-icon">📁</div>
-    <p>Camera not available in this browser.<br>Tap below to pick photos from your device.</p>
-    <label class="upload-label" for="file-input">Choose Photos</label>
-    <input type="file" id="file-input" accept="image/*" multiple onchange="handleFileUpload(event)">
-  </div>
+
   <div class="bottom-nav">
-    <button class="nav-btn" onclick="showScreen('gallery')">
+    <button class="nav-btn" id="nav-gallery2">
       <span class="icon">🖼</span>Gallery
     </button>
-    <button class="nav-btn capture-btn" onclick="takePhoto()">
-      <div class="capture-ring"><div class="capture-inner"></div></div>
-    </button>
-    <button class="nav-btn active">
+    <button class="nav-btn active" id="nav-camera2">
       <span class="icon">📷</span>Camera
     </button>
   </div>
@@ -517,14 +553,14 @@ let uploaderName = localStorage.getItem('uploaderName') || '';
       </div>
     </div>
     <div class="settings-card">
-      <label>Supabase URL</label>
-      <input class="modal-input" id="sb-url-input" type="text" placeholder="https://xxxx.supabase.co" style="margin-bottom:12px">
-      <label>Supabase Anon Key</label>
+      <label>Photo Limit Per Device (0 = unlimited)</label>
       <div class="settings-row">
-        <input class="modal-input" id="sb-key-input" type="password" placeholder="eyJ..." style="font-size:12px">
-        <button class="btn-save" style="flex:0 0 auto;padding:9px 14px" onclick="saveSupabaseConfig()">Save</button>
+        <input class="modal-input" id="limit-input" type="number" min="0" placeholder="e.g. 10">
+        <button class="btn-save" style="flex:0 0 auto;padding:9px 14px" onclick="savePhotoLimit()">Save</button>
       </div>
     </div>
+    <div class="admin-section-title">Devices</div>
+    <div id="devices-list"></div>
     <div class="admin-section-title">All Photos</div>
     <div id="admin-grid"></div>
   </div>
@@ -580,6 +616,57 @@ async function saveAdminPasswordToDB(newPw) {
   });
   return r.ok;
 }
+async function loadPhotoLimit() {
+  if (!isConfigured()) return 0;
+  try {
+    const r = await sbFetch(`/rest/v1/settings?key=eq.photo_limit&select=value`);
+    if (!r.ok) return 0;
+    const rows = await r.json();
+    return parseInt(rows[0]?.value || '0');
+  } catch { return 0; }
+}
+async function savePhotoLimitToDB(limit) {
+  const r = await sbFetch(`/rest/v1/settings?key=eq.photo_limit`, {
+    method: 'PATCH',
+    body: JSON.stringify({ value: String(limit) })
+  });
+  return r.ok;
+}
+async function registerOrUpdateDevice() {
+  if (!isConfigured()) return;
+  // Check if device exists
+  const r = await sbFetch(`/rest/v1/devices?device_id=eq.${DEVICE_ID}&select=*`);
+  if (!r.ok) return;
+  const rows = await r.json();
+  if (rows.length === 0) {
+    // New device — insert
+    await sbFetch(`/rest/v1/devices`, {
+      method: 'POST',
+      body: JSON.stringify({ device_id: DEVICE_ID, name: uploaderName || 'Unknown', photo_count: 0 })
+    });
+    devicePhotoCount = 0;
+  } else {
+    devicePhotoCount = rows[0].photo_count || 0;
+    // Update name + last_seen if name changed
+    await sbFetch(`/rest/v1/devices?device_id=eq.${DEVICE_ID}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: uploaderName || rows[0].name, last_seen: new Date().toISOString() })
+    });
+  }
+}
+async function incrementDeviceCount() {
+  devicePhotoCount++;
+  await sbFetch(`/rest/v1/devices?device_id=eq.${DEVICE_ID}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ photo_count: devicePhotoCount, last_seen: new Date().toISOString() })
+  });
+}
+async function loadDevices() {
+  if (!isConfigured()) return [];
+  const r = await sbFetch(`/rest/v1/devices?select=*&order=last_seen.desc`);
+  if (!r.ok) return [];
+  return r.json();
+}
 async function uploadPhoto(blob, filename, caption) {
   const { url, key } = getConfig();
   const path = `${Date.now()}_${filename}`;
@@ -596,7 +683,7 @@ async function uploadPhoto(blob, filename, caption) {
   const publicUrl = `${url}/storage/v1/object/public/${BUCKET_NAME}/${path}`;
   const metaRes = await sbFetch(`/rest/v1/${TABLE_NAME}`, {
     method: 'POST',
-    body: JSON.stringify({ url: publicUrl, uploader: uploaderName || 'Anonymous', caption: caption || '' })
+    body: JSON.stringify({ url: publicUrl, uploader: uploaderName || 'Anonymous', caption: caption || '', device_id: DEVICE_ID })
   });
   if (!metaRes.ok) throw new Error('DB insert failed');
   return metaRes.json();
@@ -623,11 +710,20 @@ async function updateCaption(id, caption) {
 /* ============================================================
    NAVIGATION
    ============================================================ */
-let currentScreen = 'gallery';
+let currentScreen = 'camera';
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + name).classList.add('active');
   currentScreen = name;
+  // update nav active states
+  ['nav-gallery','nav-gallery2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', name === 'gallery');
+  });
+  ['nav-camera','nav-camera2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', name === 'camera');
+  });
   if (name === 'gallery') { loadGallery(); }
   if (name === 'camera') { startCamera(); }
   if (name === 'admin') { loadAdminGrid(); }
@@ -640,14 +736,11 @@ let photos = [];
 async function loadGallery() {
   const grid = document.getElementById('gallery-grid');
   const empty = document.getElementById('gallery-empty');
-  const warn = document.getElementById('config-warning');
   if (!isConfigured()) {
-    warn.style.display = '';
     grid.innerHTML = '';
     empty.style.display = 'flex';
     return;
   }
-  warn.style.display = 'none';
   grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center"><div class="spinner"></div></div>';
   empty.style.display = 'none';
   photos = await loadPhotos();
@@ -768,17 +861,16 @@ async function updatePassword() {
     toast('Failed — check Supabase settings table exists');
   }
 }
-function saveSupabaseConfig() {
-  const url = document.getElementById('sb-url-input').value.trim();
-  const key = document.getElementById('sb-key-input').value.trim();
-  if (!url || !key) { toast('Fill both fields'); return; }
-  localStorage.setItem('sb_url', url);
-  localStorage.setItem('sb_key', key);
-  toast('Supabase config saved ✓');
-  document.getElementById('config-warning').style.display = 'none';
-}
-function scrollToConfig() {
-  triggerAdminPanel();
+async function savePhotoLimit() {
+  const v = parseInt(document.getElementById('limit-input').value);
+  if (isNaN(v) || v < 0) { toast('Enter a valid number (0 = unlimited)'); return; }
+  const ok = await savePhotoLimitToDB(v);
+  if (ok) {
+    PHOTO_LIMIT = v;
+    toast(v === 0 ? 'Limit removed — unlimited uploads ✓' : `Limit set to ${v} photos per device ✓`);
+  } else {
+    toast('Failed to save limit');
+  }
 }
 
 /* ============================================================
@@ -786,15 +878,50 @@ function scrollToConfig() {
    ============================================================ */
 async function loadAdminGrid() {
   const grid = document.getElementById('admin-grid');
-  const sbUrl = document.getElementById('sb-url-input');
-  const sbKey = document.getElementById('sb-key-input');
-  sbUrl.value = getConfig().url !== 'YOUR_SUPABASE_URL' ? getConfig().url : '';
-  sbKey.value = getConfig().key !== 'YOUR_SUPABASE_ANON_KEY' ? getConfig().key : '';
+  const devList = document.getElementById('devices-list');
+  const limitInput = document.getElementById('limit-input');
 
   if (!isConfigured()) {
-    grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Configure Supabase above to manage photos.</p>';
+    grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Supabase not configured in the HTML file.</p>';
+    devList.innerHTML = '';
     return;
   }
+
+  // Load current limit into input
+  const currentLimit = await loadPhotoLimit();
+  PHOTO_LIMIT = currentLimit;
+  limitInput.value = currentLimit;
+
+  // Load devices
+  devList.innerHTML = '<div style="padding:10px 0;text-align:center"><div class="spinner"></div></div>';
+  const devices = await loadDevices();
+  if (devices.length === 0) {
+    devList.innerHTML = '<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">No devices yet.</p>';
+  } else {
+    devList.innerHTML = devices.map(d => `
+      <div class="settings-card" style="margin-bottom:10px" id="dev-card-${d.id}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:14px;font-weight:600">${d.name || 'Unknown'}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Last seen ${new Date(d.last_seen).toLocaleString()}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:18px;font-weight:700;color:var(--accent)">${d.photo_count}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${currentLimit > 0 ? 'of ' + currentLimit : 'photos'}</div>
+          </div>
+        </div>
+        ${currentLimit > 0 ? `
+        <div style="margin-top:10px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
+          <div style="height:100%;background:${d.photo_count >= currentLimit ? 'var(--danger)' : 'var(--accent)'};width:${Math.min(100,(d.photo_count/currentLimit)*100)}%;border-radius:2px;transition:width 0.3s"></div>
+        </div>` : ''}
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="resetDeviceCount('${d.device_id}','${d.id}')" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px;font-size:12px;cursor:pointer">Reset count</button>
+          <button onclick="deleteDevice('${d.id}')" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer">Delete</button>
+        </div>
+      </div>`).join('');
+  }
+
+  // Load photos grid
   grid.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
   const allPhotos = await loadPhotos();
   if (allPhotos.length === 0) { grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No photos yet.</p>'; return; }
@@ -816,6 +943,22 @@ async function loadAdminGrid() {
     grid.appendChild(el);
   });
 }
+async function resetDeviceCount(deviceId, rowId) {
+  if (!confirm('Reset this device\'s photo count to 0?')) return;
+  await sbFetch(`/rest/v1/devices?id=eq.${rowId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ photo_count: 0 })
+  });
+  if (deviceId === DEVICE_ID) devicePhotoCount = 0;
+  toast('Count reset ✓');
+  loadAdminGrid();
+}
+async function deleteDevice(rowId) {
+  if (!confirm('Delete this device? Their upload count will be lost.')) return;
+  await sbFetch(`/rest/v1/devices?id=eq.${rowId}`, { method: 'DELETE' });
+  document.getElementById('dev-card-' + rowId)?.remove();
+  toast('Device deleted ✓');
+}
 async function saveCaption(id) {
   const cap = document.getElementById('cap-' + id).value;
   const ok = await updateCaption(id, cap);
@@ -832,72 +975,189 @@ async function confirmDelete(id, url) {
    CAMERA
    ============================================================ */
 let stream = null, facingMode = 'environment', canvas;
+let currentZoom = 1, timerSeconds = 0, gridOn = false, timerRunning = false;
+let currentRatio = '4:3', ratioIndex = 0;
+const RATIOS_DISPLAY = ['4:3','16:9','1:1','3:2','2:3'];
+const ratioMap = { '4:3':4/3, '16:9':16/9, '1:1':1, '3:2':3/2, '2:3':2/3 };
+
 async function startCamera() {
   const video = document.getElementById('camera-video');
-  const fallback = document.getElementById('fallback-view');
-  const cameraView = document.getElementById('camera-view');
   if (stream) { stream.getTracks().forEach(t => t.stop()); }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false
+      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false
     });
     video.srcObject = stream;
-    cameraView.style.display = '';
-    fallback.style.display = 'none';
-  } catch (e) {
-    cameraView.style.display = 'none';
-    fallback.style.display = 'flex';
+    video.onloadedmetadata = () => { updateCropBox(); };
+    currentZoom = 1; setActivePill('pill-1'); applyZoom(1); drawZoomTicks(1);
+  } catch (e) { toast('Camera not available on this device'); }
+}
+
+function switchCamera() { facingMode = facingMode === 'environment' ? 'user' : 'environment'; startCamera(); }
+
+/* ---- ZOOM ---- */
+function setZoomPreset(val, pillId) { currentZoom = val; setActivePill(pillId); applyZoom(val); drawZoomTicks(val); }
+function setActivePill(id) {
+  document.querySelectorAll('.zoom-pill').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById(id); if (el) el.classList.add('active');
+}
+function applyZoom(val) {
+  currentZoom = parseFloat(val);
+  if (stream) {
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      const caps = track.getCapabilities?.() || {};
+      if (caps.zoom) {
+        track.applyConstraints({ advanced: [{ zoom: Math.min(Math.max(currentZoom, caps.zoom.min||1), caps.zoom.max||5) }] }).catch(()=>{});
+        return;
+      }
+    }
+  }
+  const video = document.getElementById('camera-video');
+  video.style.transform = `scale(${Math.max(currentZoom, 1)})`;
+  video.style.transformOrigin = 'center center';
+}
+
+/* ---- ZOOM TICK BAR ---- */
+function drawZoomTicks(zoom) {
+  const cv = document.getElementById('zoom-tick-canvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Total range 0.5x → 5x mapped to ruler width
+  const minZ = 0.5, maxZ = 5;
+  const totalTicks = 90; // lots of tick marks
+  const spacing = W / totalTicks;
+  // Center position corresponds to currentZoom
+  const zoomFrac = (zoom - minZ) / (maxZ - minZ);
+  const centerOffset = zoomFrac * W * 2 - W / 2;
+
+  for (let i = -totalTicks; i < totalTicks * 2; i++) {
+    const x = i * spacing - centerOffset + W / 2;
+    if (x < 0 || x > W) continue;
+    const tickZoom = minZ + ((i * spacing - centerOffset + W / 2 - W / 2 + centerOffset) / (W * 2)) * (maxZ - minZ);
+    const isMajor = i % 10 === 0;
+    const isMid   = i % 5 === 0 && !isMajor;
+    const h = isMajor ? 14 : isMid ? 9 : 5;
+    const alpha = isMajor ? 0.9 : isMid ? 0.6 : 0.35;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.fillRect(Math.round(x), H - h, isMajor ? 2 : 1, h);
   }
 }
-function switchCamera() {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  startCamera();
+
+/* ---- CROP ---- */
+function cycleRatio() {
+  ratioIndex = (ratioIndex + 1) % RATIOS_DISPLAY.length;
+  currentRatio = RATIOS_DISPLAY[ratioIndex];
+  document.getElementById('ratio-btn').textContent = currentRatio;
+  updateCropBox();
 }
+function updateCropBox() {
+  const view = document.getElementById('camera-view');
+  const box  = document.getElementById('crop-box');
+  if (!box) return;
+  const vw = view.clientWidth, vh = view.clientHeight;
+  const ar = ratioMap[currentRatio] || 4/3;
+  let bw, bh;
+  if (ar >= 1) { bw = Math.min(vw * 0.92, vh * 0.72 * ar); bh = bw / ar; }
+  else          { bh = Math.min(vh * 0.72, vw * 0.92 / ar); bw = bh * ar; }
+  box.style.width = Math.round(bw) + 'px'; box.style.height = Math.round(bh) + 'px';
+}
+
+/* ---- GRID ---- */
+function toggleGrid() {
+  gridOn = !gridOn;
+  document.getElementById('grid-lines').style.display = gridOn ? 'block' : 'none';
+  document.getElementById('grid-btn').style.color = gridOn ? 'var(--accent)' : '#fff';
+}
+
+/* ---- TIMER ---- */
+const timerOptions = [0,3,5,10]; let timerIndex = 0;
+function cycleTimer() {
+  timerIndex = (timerIndex + 1) % timerOptions.length;
+  timerSeconds = timerOptions[timerIndex];
+  const btn = document.getElementById('timer-btn');
+  btn.textContent = timerSeconds === 0 ? '⏱' : timerSeconds + 's';
+  btn.style.color = timerSeconds > 0 ? 'var(--accent)' : '#fff';
+}
+
+/* ---- SHOOT ---- */
 async function takePhoto() {
-  if (!stream) { document.getElementById('file-input').click(); return; }
+  if (!stream) { toast('Camera not available'); return; }
   if (!isConfigured()) { toast('Configure Supabase first'); return; }
   if (!uploaderName) { showNameModal(); return; }
+  if (timerRunning) return;
+  if (timerSeconds > 0) {
+    timerRunning = true;
+    const display = document.getElementById('timer-display');
+    const count = document.getElementById('timer-count');
+    display.style.display = 'flex'; let t = timerSeconds; count.textContent = t;
+    const iv = setInterval(() => {
+      t--; if (t <= 0) { clearInterval(iv); display.style.display = 'none'; timerRunning = false; captureFrame(); }
+      else count.textContent = t;
+    }, 1000);
+  } else { captureFrame(); }
+}
 
+function captureFrame() {
   const video = document.getElementById('camera-video');
-  if (!canvas) { canvas = document.createElement('canvas'); }
-  canvas.width = video.videoWidth || 1280;
-  canvas.height = video.videoHeight || 720;
-  const ctx = canvas.getContext('2d');
-  if (facingMode === 'user') {
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-  }
-  ctx.drawImage(video, 0, 0);
-
-  const flash = document.getElementById('camera-flash');
-  flash.classList.add('go');
-  setTimeout(() => flash.classList.remove('go'), 150);
-
-  const caption = document.getElementById('caption-input').value.trim();
-  document.getElementById('caption-input').value = '';
-
-  canvas.toBlob(async blob => {
-    await doUpload(blob, 'photo.jpg', caption);
-  }, 'image/jpeg', 0.88);
+  if (!canvas) canvas = document.createElement('canvas');
+  const vw = video.videoWidth||1280, vh = video.videoHeight||720;
+  const ar = ratioMap[currentRatio]||4/3;
+  let cw, ch;
+  if (ar>=1) { cw=vw; ch=Math.round(vw/ar); if(ch>vh){ch=vh;cw=Math.round(vh*ar);} }
+  else        { ch=vh; cw=Math.round(vh*ar); if(cw>vw){cw=vw;ch=Math.round(vw/ar);} }
+  const ox=(vw-cw)/2, oy=(vh-ch)/2;
+  canvas.width=cw; canvas.height=ch;
+  const ctx=canvas.getContext('2d');
+  if (facingMode==='user') { ctx.translate(cw,0); ctx.scale(-1,1); }
+  ctx.drawImage(video, ox, oy, cw, ch, 0, 0, cw, ch);
+  // Flash
+  const fDiv=document.createElement('div');
+  fDiv.style.cssText='position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20;transition:opacity 0.08s';
+  document.getElementById('camera-view').appendChild(fDiv);
+  requestAnimationFrame(()=>{ fDiv.style.opacity='1'; setTimeout(()=>{ fDiv.style.opacity='0'; setTimeout(()=>fDiv.remove(),200); },80); });
+  const caption=document.getElementById('caption-input').value.trim();
+  document.getElementById('caption-input').value='';
+  canvas.toBlob(async blob => { await doUpload(blob,'photo.jpg',caption); },'image/jpeg',0.92);
 }
-async function handleFileUpload(event) {
-  if (!isConfigured()) { toast('Configure Supabase first'); return; }
-  if (!uploaderName) { pendingFiles = event.target.files; showNameModal(); return; }
-  const files = event.target.files;
-  for (const file of files) {
-    await doUpload(file, file.name, '');
+
+/* ---- PINCH ZOOM ---- */
+let pinchStartDist=0, pinchStartZoom=1;
+document.getElementById('camera-view').addEventListener('touchstart',e=>{
+  if(e.touches.length===2){ pinchStartDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); pinchStartZoom=currentZoom; }
+},{passive:true});
+document.getElementById('camera-view').addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const nz=Math.min(5,Math.max(0.5,pinchStartZoom*(dist/pinchStartDist)));
+    currentZoom=nz;
+    const presets=[{v:0.5,id:'pill-05'},{v:1,id:'pill-1'},{v:2,id:'pill-2'},{v:3,id:'pill-3'}];
+    setActivePill(presets.reduce((a,b)=>Math.abs(b.v-nz)<Math.abs(a.v-nz)?b:a).id);
+    applyZoom(nz); drawZoomTicks(nz);
   }
-  event.target.value = '';
-}
-let pendingFiles = null;
+},{passive:true});
+window.addEventListener('resize', updateCropBox);
+
 async function doUpload(blob, filename, caption) {
+  // Load limit if not yet loaded
+  if (PHOTO_LIMIT === null) PHOTO_LIMIT = await loadPhotoLimit();
+
+  // Check limit
+  if (PHOTO_LIMIT > 0 && devicePhotoCount >= PHOTO_LIMIT) {
+    toast(`Limit reached — max ${PHOTO_LIMIT} photo${PHOTO_LIMIT !== 1 ? 's' : ''} per device`);
+    return;
+  }
+
   setProgress(10);
   try {
     setProgress(40);
     await uploadPhoto(blob, filename, caption);
+    await incrementDeviceCount();
     setProgress(100);
-    toast('Photo uploaded! ✓');
+    toast(`Photo uploaded! ✓ (${devicePhotoCount}/${PHOTO_LIMIT > 0 ? PHOTO_LIMIT : '∞'})`);
     setTimeout(() => setProgress(0), 600);
   } catch (e) {
     setProgress(0);
@@ -913,17 +1173,13 @@ function setProgress(pct) {
    NAME MODAL
    ============================================================ */
 function showNameModal() { document.getElementById('name-modal').classList.add('open'); }
-function saveName() {
+async function saveName() {
   const v = document.getElementById('name-input').value.trim();
   if (!v) { toast('Enter your name'); return; }
   uploaderName = v;
   localStorage.setItem('uploaderName', v);
   document.getElementById('name-modal').classList.remove('open');
-  if (pendingFiles) {
-    const fakeEvent = { target: { files: pendingFiles, value: '' } };
-    pendingFiles = null;
-    handleFileUpload(fakeEvent);
-  }
+  await registerOrUpdateDevice();
 }
 document.getElementById('name-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') saveName();
@@ -944,13 +1200,52 @@ function toast(msg) {
 /* ============================================================
    INIT
    ============================================================ */
-loadGallery();
-if (!uploaderName) setTimeout(showNameModal, 500);
-startCamera();
+(async () => {
+  // Nav
+  document.getElementById('nav-gallery').addEventListener('click', () => showScreen('gallery'));
+  document.getElementById('nav-camera').addEventListener('click',  () => showScreen('camera'));
+  document.getElementById('nav-gallery2').addEventListener('click', () => showScreen('gallery'));
 
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.shiftKey && e.key === 'A') triggerAdminPanel();
-});
+  // Gallery header
+  document.getElementById('refresh-btn').addEventListener('click', loadGallery);
+  document.getElementById('admin-open-btn').addEventListener('click', triggerAdminPanel);
+
+  // Camera controls
+  document.getElementById('grid-btn').addEventListener('click', toggleGrid);
+  document.getElementById('timer-btn').addEventListener('click', cycleTimer);
+  document.getElementById('ratio-btn').addEventListener('click', cycleRatio);
+  document.getElementById('shutter-btn').addEventListener('click', takePhoto);
+  document.getElementById('flip-btn').addEventListener('click', switchCamera);
+
+  // Zoom pills
+  document.getElementById('pill-05').addEventListener('click', () => setZoomPreset(0.5, 'pill-05'));
+  document.getElementById('pill-1').addEventListener('click',  () => setZoomPreset(1,   'pill-1'));
+  document.getElementById('pill-2').addEventListener('click',  () => setZoomPreset(2,   'pill-2'));
+  document.getElementById('pill-3').addEventListener('click',  () => setZoomPreset(3,   'pill-3'));
+
+  // Lightbox
+  document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+
+  // Admin modal
+  document.getElementById('admin-pw-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkAdminPw(); });
+  document.getElementById('admin-close-btn')?.addEventListener('click', () => showScreen('gallery'));
+
+  // Keyboard shortcut
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'A') triggerAdminPanel();
+  });
+
+  // Start
+  loadGallery();
+  startCamera();
+  if (!uploaderName) {
+    setTimeout(showNameModal, 500);
+  } else {
+    await registerOrUpdateDevice();
+    PHOTO_LIMIT = await loadPhotoLimit();
+  }
+})();
+
 </script>
 </body>
 </html>
