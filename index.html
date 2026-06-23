@@ -376,7 +376,7 @@
 
 <!-- CONFIG — REPLACE THESE WITH YOUR SUPABASE DETAILS -->
 <script>
-const SUPABASE_URL = 'https://lkzcuhuxyporcgedbbuo.supabase.co';
+const SUPABASE_URL = 'https://lkzcuhuxyporcgedbbuo.supabase.co'; 
 const SUPABASE_ANON_KEY = 'sb_publishable_Os2lqYitPAzbVmXrl0ZlTg_JHbg7v5M';
 const PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
 const PLACEHOLDER_KEY = 'YOUR_SUPABASE_ANON_KEY';
@@ -497,11 +497,13 @@ const DEVICE_ID = getDeviceId();
 
     <!-- ZOOM TICK BAR + PILLS -->
     <div style="position:absolute;bottom:170px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:10px;z-index:5">
-      <!-- Tick ruler -->
-      <div id="zoom-ruler" style="position:relative;width:220px;height:28px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden">
-        <canvas id="zoom-tick-canvas" width="220" height="28" style="position:absolute;inset:0"></canvas>
+      <!-- Zoom label -->
+      <div id="zoom-label" style="color:#fff;font-size:13px;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,0.8);letter-spacing:0.02em">1.0×</div>
+      <!-- Tick ruler — full width, draggable -->
+      <div id="zoom-ruler" style="position:relative;width:100%;height:32px;cursor:ew-resize;touch-action:none">
+        <canvas id="zoom-tick-canvas" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
         <!-- center indicator -->
-        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:2px;height:14px;background:var(--accent);border-radius:1px"></div>
+        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:2px;height:16px;background:var(--accent);border-radius:1px;pointer-events:none"></div>
       </div>
       <!-- Zoom pills -->
       <div style="display:flex;gap:4px;background:rgba(0,0,0,0.45);border-radius:100px;padding:4px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)">
@@ -514,15 +516,19 @@ const DEVICE_ID = getDeviceId();
 
     <!-- BOTTOM CONTROLS -->
     <div style="position:absolute;bottom:0;left:0;right:0;padding:0 0 20px;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 100%);z-index:5">
-      <div style="padding:0 20px 12px">
-        <input class="caption-input" id="caption-input" type="text" placeholder="Add a caption… (optional)" maxlength="120">
-      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:0 32px">
         <button class="cam-btn" id="ratio-btn" style="font-size:12px;font-weight:700;color:var(--accent);border-color:var(--accent);min-width:44px">4:3</button>
         <button class="shutter-btn" id="shutter-btn">
           <div class="shutter-inner"></div>
         </button>
-        <button class="cam-btn" id="flip-btn">🔄</button>
+        <button class="cam-btn" id="flip-btn" style="display:flex;align-items:center;justify-content:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 7H4"/>
+            <path d="M4 7l4-4M4 7l4 4"/>
+            <path d="M4 17h16"/>
+            <path d="M20 17l-4-4M20 17l-4 4"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
@@ -988,7 +994,7 @@ async function startCamera() {
       video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false
     });
     video.srcObject = stream;
-    video.onloadedmetadata = () => { updateCropBox(); };
+    video.onloadedmetadata = () => { updateCropBox(); drawZoomTicks(1); };
     currentZoom = 1; setActivePill('pill-1'); applyZoom(1); drawZoomTicks(1);
   } catch (e) { toast('Camera not available on this device'); }
 }
@@ -996,7 +1002,13 @@ async function startCamera() {
 function switchCamera() { facingMode = facingMode === 'environment' ? 'user' : 'environment'; startCamera(); }
 
 /* ---- ZOOM ---- */
-function setZoomPreset(val, pillId) { currentZoom = val; setActivePill(pillId); applyZoom(val); drawZoomTicks(val); }
+function setZoomPreset(val, pillId) {
+  currentZoom = val;
+  setActivePill(pillId);
+  applyZoom(val);
+  document.getElementById('zoom-label').textContent = val.toFixed(1) + '×';
+  drawZoomTicks(val);
+}
 function setActivePill(id) {
   document.querySelectorAll('.zoom-pill').forEach(p => p.classList.remove('active'));
   const el = document.getElementById(id); if (el) el.classList.add('active');
@@ -1018,34 +1030,86 @@ function applyZoom(val) {
   video.style.transformOrigin = 'center center';
 }
 
-/* ---- ZOOM TICK BAR ---- */
+/* ---- ZOOM TICK BAR (draggable) ---- */
+const MIN_ZOOM = 0.5, MAX_ZOOM = 5;
+// px per zoom unit on the ruler — higher = more spread out ticks
+const ZOOM_PX_RATIO = 80;
+
 function drawZoomTicks(zoom) {
   const cv = document.getElementById('zoom-tick-canvas');
   if (!cv) return;
+  const W = cv.offsetWidth || 300;
+  const H = cv.offsetHeight || 32;
+  cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
-  const W = cv.width, H = cv.height;
   ctx.clearRect(0, 0, W, H);
 
-  // Total range 0.5x → 5x mapped to ruler width
-  const minZ = 0.5, maxZ = 5;
-  const totalTicks = 90; // lots of tick marks
-  const spacing = W / totalTicks;
-  // Center position corresponds to currentZoom
-  const zoomFrac = (zoom - minZ) / (maxZ - minZ);
-  const centerOffset = zoomFrac * W * 2 - W / 2;
-
-  for (let i = -totalTicks; i < totalTicks * 2; i++) {
-    const x = i * spacing - centerOffset + W / 2;
-    if (x < 0 || x > W) continue;
-    const tickZoom = minZ + ((i * spacing - centerOffset + W / 2 - W / 2 + centerOffset) / (W * 2)) * (maxZ - minZ);
-    const isMajor = i % 10 === 0;
-    const isMid   = i % 5 === 0 && !isMajor;
-    const h = isMajor ? 14 : isMid ? 9 : 5;
-    const alpha = isMajor ? 0.9 : isMid ? 0.6 : 0.35;
+  // Center of canvas = current zoom position
+  // Each 1.0 zoom unit = ZOOM_PX_RATIO px
+  const centerX = W / 2;
+  // Draw ticks from minZ to maxZ
+  // tick every 0.1 zoom units
+  const tickStep = 0.1;
+  for (let z = MIN_ZOOM; z <= MAX_ZOOM + tickStep; z = Math.round((z + tickStep) * 10) / 10) {
+    const x = centerX + (z - zoom) * ZOOM_PX_RATIO;
+    if (x < -2 || x > W + 2) continue;
+    const isMajor = Math.round(z * 10) % 10 === 0;   // whole numbers: 1, 2, 3…
+    const isMid   = Math.round(z * 10) % 5 === 0 && !isMajor; // 0.5, 1.5…
+    const h       = isMajor ? 18 : isMid ? 11 : 6;
+    const alpha   = isMajor ? 1 : isMid ? 0.65 : 0.35;
+    const w       = isMajor ? 2 : 1;
     ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.fillRect(Math.round(x), H - h, isMajor ? 2 : 1, h);
+    ctx.fillRect(Math.round(x) - w/2, H - h, w, h);
+    // Label major ticks
+    if (isMajor && z >= MIN_ZOOM && z <= MAX_ZOOM) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.abs(x - centerX) < 30 ? 0 : 0.55})`;
+      ctx.font = '10px -apple-system,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(z % 1 === 0 ? z + '×' : z.toFixed(1) + '×', Math.round(x), H - 20);
+    }
   }
 }
+
+function updateZoomFromDrag(newZoom) {
+  currentZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newZoom));
+  currentZoom = Math.round(currentZoom * 10) / 10; // snap to 0.1
+  document.getElementById('zoom-label').textContent = currentZoom.toFixed(1) + '×';
+  // Update pill active state to nearest preset
+  const presets = [{v:0.5,id:'pill-05'},{v:1,id:'pill-1'},{v:2,id:'pill-2'},{v:3,id:'pill-3'}];
+  setActivePill(presets.reduce((a,b) => Math.abs(b.v-currentZoom) < Math.abs(a.v-currentZoom) ? b : a).id);
+  applyZoom(currentZoom);
+  drawZoomTicks(currentZoom);
+}
+
+// Ruler drag — touch
+let rulerDragStartX = null, rulerDragStartZoom = null;
+const ruler = document.getElementById('zoom-ruler');
+ruler.addEventListener('touchstart', e => {
+  rulerDragStartX = e.touches[0].clientX;
+  rulerDragStartZoom = currentZoom;
+  e.stopPropagation();
+}, { passive: true });
+ruler.addEventListener('touchmove', e => {
+  if (rulerDragStartX === null) return;
+  const dx = rulerDragStartX - e.touches[0].clientX; // drag left = zoom in
+  const dz = dx / ZOOM_PX_RATIO;
+  updateZoomFromDrag(rulerDragStartZoom + dz);
+  e.stopPropagation();
+}, { passive: true });
+ruler.addEventListener('touchend', () => { rulerDragStartX = null; }, { passive: true });
+
+// Ruler drag — mouse (for desktop testing)
+let mouseDown = false, mouseDragStartX = null, mouseDragStartZoom = null;
+ruler.addEventListener('mousedown', e => {
+  mouseDown = true; mouseDragStartX = e.clientX; mouseDragStartZoom = currentZoom;
+});
+window.addEventListener('mousemove', e => {
+  if (!mouseDown) return;
+  const dx = mouseDragStartX - e.clientX;
+  const dz = dx / ZOOM_PX_RATIO;
+  updateZoomFromDrag(mouseDragStartZoom + dz);
+});
+window.addEventListener('mouseup', () => { mouseDown = false; });
 
 /* ---- CROP ---- */
 function cycleRatio() {
@@ -1132,11 +1196,8 @@ document.getElementById('camera-view').addEventListener('touchstart',e=>{
 document.getElementById('camera-view').addEventListener('touchmove',e=>{
   if(e.touches.length===2){
     const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-    const nz=Math.min(5,Math.max(0.5,pinchStartZoom*(dist/pinchStartDist)));
-    currentZoom=nz;
-    const presets=[{v:0.5,id:'pill-05'},{v:1,id:'pill-1'},{v:2,id:'pill-2'},{v:3,id:'pill-3'}];
-    setActivePill(presets.reduce((a,b)=>Math.abs(b.v-nz)<Math.abs(a.v-nz)?b:a).id);
-    applyZoom(nz); drawZoomTicks(nz);
+    const nz=Math.min(MAX_ZOOM,Math.max(MIN_ZOOM,pinchStartZoom*(dist/pinchStartDist)));
+    updateZoomFromDrag(nz);
   }
 },{passive:true});
 window.addEventListener('resize', updateCropBox);
