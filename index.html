@@ -412,7 +412,17 @@ const DEVICE_ID = getDeviceId();
   <p id="lightbox-caption"></p>
 </div>
 
-<!-- NAME MODAL -->
+<!-- PREVIEW MODAL -->
+<div class="modal-overlay" id="preview-modal">
+  <div class="modal-card" style="padding:0;overflow:hidden;max-width:360px;width:100%">
+    <img id="preview-img" src="" alt="" style="width:100%;display:block;max-height:60dvh;object-fit:contain;background:#000">
+    <div style="padding:18px 18px 14px">
+      <input class="modal-input" id="preview-caption" type="text" placeholder="Add a caption… (optional)" maxlength="120" style="margin-bottom:12px">
+      <button class="btn-primary" id="preview-upload-btn">Upload</button>
+      <button class="btn-secondary" id="preview-retake-btn">Retake</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="name-modal">
   <div class="modal-card">
     <h2>Who's uploading? 👋</h2>
@@ -1178,14 +1188,35 @@ function captureFrame() {
   const ctx=canvas.getContext('2d');
   if (facingMode==='user') { ctx.translate(cw,0); ctx.scale(-1,1); }
   ctx.drawImage(video, ox, oy, cw, ch, 0, 0, cw, ch);
+
   // Flash
   const fDiv=document.createElement('div');
   fDiv.style.cssText='position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20;transition:opacity 0.08s';
   document.getElementById('camera-view').appendChild(fDiv);
   requestAnimationFrame(()=>{ fDiv.style.opacity='1'; setTimeout(()=>{ fDiv.style.opacity='0'; setTimeout(()=>fDiv.remove(),200); },80); });
-  const caption=document.getElementById('caption-input').value.trim();
-  document.getElementById('caption-input').value='';
-  canvas.toBlob(async blob => { await doUpload(blob,'photo.jpg',caption); },'image/jpeg',0.92);
+
+  // Show preview modal
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  document.getElementById('preview-img').src = dataUrl;
+  document.getElementById('preview-caption').value = '';
+  document.getElementById('preview-modal').classList.add('open');
+}
+
+let pendingBlob = null;
+async function submitPreview() {
+  const btn = document.getElementById('preview-upload-btn');
+  btn.textContent = 'Uploading…'; btn.disabled = true;
+  const caption = document.getElementById('preview-caption').value.trim();
+  canvas.toBlob(async blob => {
+    pendingBlob = blob;
+    await doUpload(blob, 'photo.jpg', caption);
+    document.getElementById('preview-modal').classList.remove('open');
+    btn.textContent = 'Upload'; btn.disabled = false;
+  }, 'image/jpeg', 0.92);
+}
+
+function retakePhoto() {
+  document.getElementById('preview-modal').classList.remove('open');
 }
 
 /* ---- PINCH ZOOM ---- */
@@ -1283,6 +1314,9 @@ function toast(msg) {
   document.getElementById('pill-1').addEventListener('click',  () => setZoomPreset(1,   'pill-1'));
   document.getElementById('pill-2').addEventListener('click',  () => setZoomPreset(2,   'pill-2'));
   document.getElementById('pill-3').addEventListener('click',  () => setZoomPreset(3,   'pill-3'));
+
+  document.getElementById('preview-upload-btn').addEventListener('click', submitPreview);
+  document.getElementById('preview-retake-btn').addEventListener('click', retakePhoto);
 
   // Lightbox
   document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
