@@ -601,13 +601,14 @@ function isConfigured() {
 }
 async function sbFetch(path, options = {}) {
   const { url, key } = getConfig();
+  const isDelete = options.method === 'DELETE';
   return fetch(url + path, {
     ...options,
     headers: {
       'apikey': key,
       'Authorization': 'Bearer ' + key,
       'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
+      ...(isDelete ? {} : { 'Prefer': 'return=representation' }),
       ...(options.headers || {})
     }
   });
@@ -913,11 +914,16 @@ async function loadAdminGrid() {
   // Load devices
   devList.innerHTML = '<div style="padding:10px 0;text-align:center"><div class="spinner"></div></div>';
   const devices = await loadDevices();
+  devList.innerHTML = '';
   if (devices.length === 0) {
     devList.innerHTML = '<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">No devices yet.</p>';
   } else {
-    devList.innerHTML = devices.map(d => `
-      <div class="settings-card" style="margin-bottom:10px" id="dev-card-${d.id}">
+    devices.forEach(d => {
+      const card = document.createElement('div');
+      card.className = 'settings-card';
+      card.id = 'dev-card-' + d.id;
+      card.style.marginBottom = '10px';
+      card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:14px;font-weight:600">${d.name || 'Unknown'}</div>
@@ -933,10 +939,31 @@ async function loadAdminGrid() {
           <div style="height:100%;background:${d.photo_count >= currentLimit ? 'var(--danger)' : 'var(--accent)'};width:${Math.min(100,(d.photo_count/currentLimit)*100)}%;border-radius:2px;transition:width 0.3s"></div>
         </div>` : ''}
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button onclick="resetDeviceCount('${d.device_id}','${d.id}')" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px;font-size:12px;cursor:pointer">Reset count</button>
-          <button onclick="deleteDevice('${d.id}')" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer">Delete</button>
-        </div>
-      </div>`).join('');
+          <button class="dev-reset-btn" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px;font-size:12px;cursor:pointer">Reset count</button>
+          <button class="dev-delete-btn" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer">Delete</button>
+        </div>`;
+      // Wire buttons directly — no inline onclick, no window lookup
+      card.querySelector('.dev-reset-btn').addEventListener('click', async () => {
+        if (!confirm('Reset this device\'s photo count to 0?')) return;
+        const r = await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, {
+          method: 'PATCH', body: JSON.stringify({ photo_count: 0 })
+        });
+        if (r.ok) {
+          if (d.device_id === DEVICE_ID) devicePhotoCount = 0;
+          card.querySelector('[style*="font-size:18px"]').textContent = '0';
+          toast('Count reset ✓');
+        } else { toast('Reset failed'); }
+      });
+      card.querySelector('.dev-delete-btn').addEventListener('click', async () => {
+        if (!confirm('Delete this device? Their upload count will be lost.')) return;
+        const r = await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, { method: 'DELETE' });
+        if (r.ok || r.status === 204) {
+          card.remove();
+          toast('Device deleted ✓');
+        } else { toast('Delete failed'); }
+      });
+      devList.appendChild(card);
+    });
   }
 
   // Load photos grid
