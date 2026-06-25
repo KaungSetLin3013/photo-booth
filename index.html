@@ -529,7 +529,7 @@ const DEVICE_ID = getDeviceId();
     <!-- BOTTOM CONTROLS -->
     <div style="position:absolute;bottom:0;left:0;right:0;padding:0 0 20px;background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,transparent 100%);z-index:5">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:0 32px">
-        <button class="cam-btn" id="ratio-btn" style="font-size:12px;font-weight:700;color:var(--accent);border-color:var(--accent);min-width:44px">4:3</button>
+        <button class="cam-btn" id="ratio-btn" style="font-size:12px;font-weight:700;color:var(--accent);border-color:var(--accent);min-width:44px">full</button>
         <button class="shutter-btn" id="shutter-btn">
           <div class="shutter-inner"></div>
         </button>
@@ -994,9 +994,9 @@ async function confirmDelete(id, url) {
    ============================================================ */
 let stream = null, facingMode = 'environment', canvas;
 let currentZoom = 1, timerSeconds = 0, gridOn = false, timerRunning = false;
-let currentRatio = '4:3', ratioIndex = 0;
-const RATIOS_DISPLAY = ['4:3','16:9','1:1','3:2','2:3'];
-const ratioMap = { '4:3':4/3, '16:9':16/9, '1:1':1, '3:2':3/2, '2:3':2/3 };
+let currentRatio = 'full', ratioIndex = 0;
+const RATIOS_DISPLAY = ['full','3:4','1:1','9:16'];
+const ratioMap = { 'full': null, '3:4': 3/4, '1:1': 1, '9:16': 9/16 };
 
 async function startCamera() {
   const video = document.getElementById('camera-video');
@@ -1131,42 +1131,57 @@ function cycleRatio() {
   updateCropBox();
 }
 function updateCropBox() {
-  const view   = document.getElementById('camera-view');
-  const vw     = view.clientWidth;
-  const vh     = view.clientHeight;
-  const ar     = ratioMap[currentRatio] || 4/3;
+  const view  = document.getElementById('camera-view');
+  const vw    = view.clientWidth;
+  const vh    = view.clientHeight;
+  const ar    = ratioMap[currentRatio]; // null = full
 
-  // Crop height = full width divided by aspect ratio
-  const cropH  = Math.min(vw / ar, vh);
-  const cropY  = (vh - cropH) / 2; // centered vertically
-
-  const maskTop    = document.getElementById('crop-mask-top');
-  const maskBot    = document.getElementById('crop-mask-bottom');
-  const gridLines  = document.getElementById('grid-lines');
+  const maskTop   = document.getElementById('crop-mask-top');
+  const maskBot   = document.getElementById('crop-mask-bottom');
+  const gridLines = document.getElementById('grid-lines');
   const tl = document.getElementById('crop-corner-tl');
   const tr = document.getElementById('crop-corner-tr');
   const bl = document.getElementById('crop-corner-bl');
   const br = document.getElementById('crop-corner-br');
 
-  maskTop.style.height    = cropY + 'px';
-  maskBot.style.height    = cropY + 'px';
-
-  // Grid lines sit inside the crop zone
-  gridLines.style.top     = cropY + 'px';
-  gridLines.style.height  = cropH + 'px';
-
-  // Corners
-  const pad = 0;
-  tl.style.top    = (cropY + pad) + 'px'; tl.style.left   = pad + 'px';
-  tr.style.top    = (cropY + pad) + 'px'; tr.style.right  = pad + 'px';
-  bl.style.bottom = (cropY + pad) + 'px'; bl.style.left   = pad + 'px';
-  br.style.bottom = (cropY + pad) + 'px'; br.style.right  = pad + 'px';
-
-  // For 1:1 or portrait ratios, no masks needed if height exceeds view
-  if (cropY <= 0) {
+  if (!ar) {
+    // Full — no masks, no corners
     maskTop.style.height  = '0px';
     maskBot.style.height  = '0px';
+    gridLines.style.top    = '0px';
+    gridLines.style.height = vh + 'px';
+    [tl,tr,bl,br].forEach(c => c.style.opacity = '0');
+    return;
   }
+
+  [tl,tr,bl,br].forEach(c => c.style.opacity = '1');
+
+  // Portrait ratios (3:4, 9:16, 1:1): crop width = full, height from ratio
+  // ar < 1 means portrait (width/height < 1)
+  let cropW, cropH;
+  if (ar <= 1) {
+    // portrait or square: fill full width, crop top/bottom
+    cropW = vw;
+    cropH = Math.min(vw / ar, vh);
+  } else {
+    // landscape: fill full height, crop sides (shouldn't happen with new ratios)
+    cropH = vh;
+    cropW = Math.min(vh * ar, vw);
+  }
+
+  const cropY = (vh - cropH) / 2;
+  const cropX = (vw - cropW) / 2;
+
+  maskTop.style.height  = Math.max(0, cropY) + 'px';
+  maskBot.style.height  = Math.max(0, cropY) + 'px';
+
+  gridLines.style.top    = Math.max(0, cropY) + 'px';
+  gridLines.style.height = cropH + 'px';
+
+  tl.style.top    = Math.max(0, cropY) + 'px'; tl.style.left  = cropX + 'px';
+  tr.style.top    = Math.max(0, cropY) + 'px'; tr.style.right = cropX + 'px';
+  bl.style.bottom = Math.max(0, cropY) + 'px'; bl.style.left  = cropX + 'px';
+  br.style.bottom = Math.max(0, cropY) + 'px'; br.style.right = cropX + 'px';
 }
 
 /* ---- GRID ---- */
@@ -1208,13 +1223,21 @@ function captureFrame() {
   const video = document.getElementById('camera-video');
   if (!canvas) canvas = document.createElement('canvas');
   const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-  const ar = ratioMap[currentRatio] || 4/3;
+  const ar = ratioMap[currentRatio]; // null = full
 
-  // Full width crop, height derived from ratio
-  let cw = vw, ch = Math.round(vw / ar);
-  if (ch > vh) { ch = vh; cw = Math.round(vh * ar); }
-  const ox = Math.round((vw - cw) / 2);
-  const oy = Math.round((vh - ch) / 2);
+  let cw, ch, ox, oy;
+  if (!ar) {
+    // Full — use entire frame
+    cw = vw; ch = vh; ox = 0; oy = 0;
+  } else if (ar <= 1) {
+    // Portrait/square: full width, crop top/bottom
+    cw = vw; ch = Math.min(Math.round(vw / ar), vh);
+    ox = 0; oy = Math.round((vh - ch) / 2);
+  } else {
+    // Landscape: full height, crop sides
+    ch = vh; cw = Math.min(Math.round(vh * ar), vw);
+    ox = Math.round((vw - cw) / 2); oy = 0;
+  }
 
   canvas.width = cw; canvas.height = ch;
   const ctx = canvas.getContext('2d');
