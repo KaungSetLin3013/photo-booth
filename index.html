@@ -232,11 +232,53 @@
     padding: 11px; cursor: pointer; margin-top: 8px;
   }
 
-  /* ADMIN PANEL */
-  #screen-admin {
-    overflow: hidden;
+  /* ADMIN TABS */  #screen-admin { overflow: hidden; }
+  .admin-tab {
+    flex: 1; background: none; border: none; color: var(--text-muted);
+    font-size: 11px; font-weight: 600; padding: 12px 4px;
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.15s; white-space: nowrap;
   }
-  .admin-scroll { flex: 1; overflow-y: auto; padding: 0 16px 20px; }
+  .admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .admin-tab-content {
+    display: none; flex-direction: column;
+    flex: 1; overflow: hidden;
+  }
+  .admin-tab-content.active { display: flex; }
+  .stat-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .stat-num { font-size: 28px; font-weight: 800; color: var(--accent); }
+  .stat-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .filter-tag {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-muted); font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: 100px; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0; transition: all 0.15s;
+  }
+  .filter-tag.active { background: var(--accent); color: #1a1a1a; border-color: var(--accent); }
+  .admin-photo-row {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px; margin-bottom: 10px;
+  }
+  .admin-photo-row img {
+    width: 72px; height: 72px; object-fit: cover;
+    border-radius: 8px; flex-shrink: 0;
+  }
+  .admin-photo-row .info { flex: 1; min-width: 0; }
+  .admin-photo-row .meta { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .admin-photo-row .cap-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 8px; color: var(--text);
+    font-size: 12px; outline: none; margin-bottom: 6px;
+  }
+  .admin-photo-row .cap-input:focus { border-color: var(--accent); }
+  .admin-photo-row .row-actions { display: flex; gap: 6px; }
+  .row-save { background: var(--accent); color: #1a1a1a; border: none; border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .row-del  { background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; padding: 5px 10px; font-size: 11px; cursor: pointer; }
   .admin-photo-item {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -557,30 +599,102 @@ const DEVICE_ID = getDeviceId();
 
 <!-- ADMIN SCREEN -->
 <div class="screen" id="screen-admin">
-  <div class="header">
+  <!-- Header -->
+  <div class="header" style="padding-bottom:0">
     <h1>Admin <span class="accent">Panel</span></h1>
-    <div class="header-btn" onclick="showScreen('gallery')">✕</div>
+    <div class="header-btn" id="admin-close-btn">✕</div>
   </div>
-  <div class="admin-scroll" id="admin-scroll">
-    <div class="admin-section-title">Settings</div>
-    <div class="settings-card">
-      <label>Change Admin Password (saved to Supabase)</label>
-      <div class="settings-row">
-        <input class="modal-input" id="new-pw-input" type="password" placeholder="New password">
-        <button class="btn-save" style="flex:0 0 auto;padding:9px 14px" onclick="updatePassword()">Save</button>
+
+  <!-- Tab Bar -->
+  <div style="display:flex;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0">
+    <button class="admin-tab active" data-tab="overview">📊 Overview</button>
+    <button class="admin-tab" data-tab="photos">🖼 Photos</button>
+    <button class="admin-tab" data-tab="devices">📱 Devices</button>
+    <button class="admin-tab" data-tab="settings">⚙️ Settings</button>
+  </div>
+
+  <!-- TAB: OVERVIEW -->
+  <div class="admin-tab-content active" id="tab-overview">
+    <div style="padding:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div class="stat-card">
+          <div class="stat-num" id="stat-photos">—</div>
+          <div class="stat-label">Total Photos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-devices">—</div>
+          <div class="stat-label">Devices</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-limit">—</div>
+          <div class="stat-label">Photo Limit</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-today">—</div>
+          <div class="stat-label">Today</div>
+        </div>
+      </div>
+      <div class="admin-section-title">Recent Uploads</div>
+      <div id="overview-recent"></div>
+    </div>
+  </div>
+
+  <!-- TAB: PHOTOS -->
+  <div class="admin-tab-content" id="tab-photos">
+    <div style="padding:12px 16px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input class="modal-input" id="photo-search" placeholder="Search by uploader or caption…" style="margin:0;flex:1;padding:9px 12px;font-size:13px">
+      <button class="btn-save" id="photo-search-btn" style="padding:9px 14px;white-space:nowrap">Search</button>
+    </div>
+    <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto">
+      <button class="filter-tag active" data-sort="newest">Newest</button>
+      <button class="filter-tag" data-sort="oldest">Oldest</button>
+      <button class="filter-tag" data-sort="uploader">By Name</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:12px 16px" id="admin-photo-list"></div>
+  </div>
+
+  <!-- TAB: DEVICES -->
+  <div class="admin-tab-content" id="tab-devices">
+    <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0">
+      <span style="font-size:13px;color:var(--text-muted)" id="device-count-label">Loading…</span>
+      <button class="btn-save" id="refresh-devices-btn" style="padding:7px 14px;font-size:12px">Refresh</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:12px 16px" id="devices-list"></div>
+  </div>
+
+  <!-- TAB: SETTINGS -->
+  <div class="admin-tab-content" id="tab-settings">
+    <div style="padding:16px">
+      <div class="admin-section-title">Security</div>
+      <div class="settings-card">
+        <label>Admin Password</label>
+        <div style="display:flex;gap:8px">
+          <input class="modal-input" id="new-pw-input" type="password" placeholder="New password" style="margin:0;flex:1">
+          <button class="btn-save" id="save-pw-btn" style="padding:9px 14px;white-space:nowrap">Save</button>
+        </div>
+      </div>
+
+      <div class="admin-section-title">Upload Controls</div>
+      <div class="settings-card">
+        <label>Photo Limit Per Device <span style="color:var(--text-muted);font-weight:400">(0 = unlimited)</span></label>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input class="modal-input" id="limit-input" type="number" min="0" placeholder="e.g. 10" style="margin:0;flex:1">
+          <button class="btn-save" id="save-limit-btn" style="padding:9px 14px;white-space:nowrap">Save</button>
+        </div>
+      </div>
+
+      <div class="admin-section-title">Danger Zone</div>
+      <div class="settings-card" style="border-color:rgba(255,79,79,0.3)">
+        <label style="color:var(--danger)">Delete All Photos</label>
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 10px">Permanently removes every photo from storage and database.</p>
+        <button id="delete-all-btn" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:10px;padding:10px 16px;font-size:13px;cursor:pointer;width:100%">🗑 Delete All Photos</button>
+      </div>
+      <div class="settings-card" style="border-color:rgba(255,79,79,0.3)">
+        <label style="color:var(--danger)">Reset All Device Counts</label>
+        <p style="font-size:12px;color:var(--text-muted);margin:6px 0 10px">Resets every device's upload count to 0.</p>
+        <button id="reset-all-btn" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:10px;padding:10px 16px;font-size:13px;cursor:pointer;width:100%">↺ Reset All Counts</button>
       </div>
     </div>
-    <div class="settings-card">
-      <label>Photo Limit Per Device (0 = unlimited)</label>
-      <div class="settings-row">
-        <input class="modal-input" id="limit-input" type="number" min="0" placeholder="e.g. 10">
-        <button class="btn-save" style="flex:0 0 auto;padding:9px 14px" onclick="savePhotoLimit()">Save</button>
-      </div>
-    </div>
-    <div class="admin-section-title">Devices</div>
-    <div id="devices-list"></div>
-    <div class="admin-section-title">All Photos</div>
-    <div id="admin-grid"></div>
   </div>
 </div>
 
@@ -893,119 +1007,159 @@ async function savePhotoLimit() {
 }
 
 /* ============================================================
-   ADMIN GRID
+   ADMIN — TABS
    ============================================================ */
-async function loadAdminGrid() {
-  const grid = document.getElementById('admin-grid');
-  const devList = document.getElementById('devices-list');
-  const limitInput = document.getElementById('limit-input');
+let adminPhotoCache = [], adminDeviceCache = [], adminSortMode = 'newest';
 
-  if (!isConfigured()) {
-    grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px">Supabase not configured in the HTML file.</p>';
-    devList.innerHTML = '';
-    return;
+function switchAdminTab(tabName) {
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + tabName));
+  if (tabName === 'overview')  loadAdminOverview();
+  if (tabName === 'photos')    loadAdminPhotos();
+  if (tabName === 'devices')   loadAdminDevices();
+  if (tabName === 'settings')  loadAdminSettings();
+}
+
+function loadAdminGrid() { switchAdminTab('overview'); } // called by showScreen
+
+/* ---- OVERVIEW ---- */
+async function loadAdminOverview() {
+  if (!isConfigured()) return;
+  const [allPhotos, allDevices, limit] = await Promise.all([loadPhotos(), loadDevices(), loadPhotoLimit()]);
+  adminPhotoCache = allPhotos; adminDeviceCache = allDevices; PHOTO_LIMIT = limit;
+  document.getElementById('stat-photos').textContent  = allPhotos.length;
+  document.getElementById('stat-devices').textContent = allDevices.length;
+  document.getElementById('stat-limit').textContent   = limit > 0 ? limit : '∞';
+  const today = new Date().toDateString();
+  document.getElementById('stat-today').textContent   = allPhotos.filter(p => new Date(p.created_at).toDateString() === today).length;
+  // Recent 6 photos
+  const recent = document.getElementById('overview-recent');
+  const latest = allPhotos.slice(0, 6);
+  if (latest.length === 0) { recent.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No photos yet.</p>'; return; }
+  recent.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:4px;border-radius:10px;overflow:hidden';
+  latest.forEach(p => {
+    const img = document.createElement('img');
+    img.src = p.url; img.style.cssText = 'width:100%;aspect-ratio:1;object-fit:cover;display:block';
+    grid.appendChild(img);
+  });
+  recent.appendChild(grid);
+}
+
+/* ---- PHOTOS ---- */
+async function loadAdminPhotos(search = '') {
+  const list = document.getElementById('admin-photo-list');
+  list.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
+  if (!adminPhotoCache.length) adminPhotoCache = await loadPhotos();
+  let photos = [...adminPhotoCache];
+  if (search) {
+    const q = search.toLowerCase();
+    photos = photos.filter(p => (p.uploader||'').toLowerCase().includes(q) || (p.caption||'').toLowerCase().includes(q));
   }
-
-  // Load current limit into input
-  const currentLimit = await loadPhotoLimit();
-  PHOTO_LIMIT = currentLimit;
-  limitInput.value = currentLimit;
-
-  // Load devices
-  devList.innerHTML = '<div style="padding:10px 0;text-align:center"><div class="spinner"></div></div>';
-  const devices = await loadDevices();
-  devList.innerHTML = '';
-  if (devices.length === 0) {
-    devList.innerHTML = '<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">No devices yet.</p>';
-  } else {
-    devices.forEach(d => {
-      const card = document.createElement('div');
-      card.className = 'settings-card';
-      card.id = 'dev-card-' + d.id;
-      card.style.marginBottom = '10px';
-      card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:14px;font-weight:600">${d.name || 'Unknown'}</div>
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Last seen ${new Date(d.last_seen).toLocaleString()}</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:18px;font-weight:700;color:var(--accent)">${d.photo_count}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${currentLimit > 0 ? 'of ' + currentLimit : 'photos'}</div>
-          </div>
-        </div>
-        ${currentLimit > 0 ? `
-        <div style="margin-top:10px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden">
-          <div style="height:100%;background:${d.photo_count >= currentLimit ? 'var(--danger)' : 'var(--accent)'};width:${Math.min(100,(d.photo_count/currentLimit)*100)}%;border-radius:2px;transition:width 0.3s"></div>
-        </div>` : ''}
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button class="dev-reset-btn" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px;font-size:12px;cursor:pointer">Reset count</button>
-          <button class="dev-delete-btn" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer">Delete</button>
-        </div>`;
-      // Wire buttons directly — no inline onclick, no window lookup
-      card.querySelector('.dev-reset-btn').addEventListener('click', async () => {
-        if (!confirm('Reset this device\'s photo count to 0?')) return;
-        const r = await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, {
-          method: 'PATCH', body: JSON.stringify({ photo_count: 0 })
-        });
-        if (r.ok) {
-          if (d.device_id === DEVICE_ID) devicePhotoCount = 0;
-          card.querySelector('[style*="font-size:18px"]').textContent = '0';
-          toast('Count reset ✓');
-        } else { toast('Reset failed'); }
-      });
-      card.querySelector('.dev-delete-btn').addEventListener('click', async () => {
-        if (!confirm('Delete this device? Their upload count will be lost.')) return;
-        const r = await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, { method: 'DELETE' });
-        if (r.ok || r.status === 204) {
-          card.remove();
-          toast('Device deleted ✓');
-        } else { toast('Delete failed'); }
-      });
-      devList.appendChild(card);
-    });
-  }
-
-  // Load photos grid
-  grid.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
-  const allPhotos = await loadPhotos();
-  if (allPhotos.length === 0) { grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No photos yet.</p>'; return; }
-  grid.innerHTML = '';
-  allPhotos.forEach(p => {
-    const el = document.createElement('div');
-    el.className = 'admin-photo-item';
-    el.id = 'admin-item-' + p.id;
-    el.innerHTML = `
-      <img class="admin-photo-img" src="${p.url}" alt="">
-      <div class="admin-photo-body">
-        <div class="admin-meta">${p.uploader || 'Anonymous'} · ${new Date(p.created_at).toLocaleString()}</div>
-        <input class="admin-caption-input" type="text" value="${(p.caption||'').replace(/"/g,'&quot;')}" placeholder="Caption..." id="cap-${p.id}">
-        <div class="admin-actions">
-          <button class="btn-save" onclick="saveCaption('${p.id}')">Save</button>
-          <button class="btn-delete" onclick="confirmDelete('${p.id}','${p.url}')">Delete</button>
-        </div>
+  if (adminSortMode === 'oldest')   photos.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+  if (adminSortMode === 'uploader') photos.sort((a,b) => (a.uploader||'').localeCompare(b.uploader||''));
+  list.innerHTML = '';
+  if (!photos.length) { list.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No photos found.</p>'; return; }
+  photos.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'admin-photo-row';
+    row.id = 'admin-item-' + p.id;
+    const img = document.createElement('img');
+    img.src = p.url; img.loading = 'lazy';
+    const info = document.createElement('div');
+    info.className = 'info';
+    info.innerHTML = `
+      <div class="meta">📸 ${p.uploader||'Anonymous'} · ${new Date(p.created_at).toLocaleString()}</div>
+      <input class="cap-input" type="text" value="${(p.caption||'').replace(/"/g,'&quot;')}" placeholder="No caption">
+      <div class="row-actions">
+        <button class="row-save">Save</button>
+        <button class="row-del">Delete</button>
       </div>`;
-    grid.appendChild(el);
+    info.querySelector('.row-save').addEventListener('click', async () => {
+      const cap = info.querySelector('.cap-input').value;
+      const ok = await updateCaption(p.id, cap);
+      if (ok) { p.caption = cap; toast('Saved ✓'); } else toast('Error saving');
+    });
+    info.querySelector('.row-del').addEventListener('click', async () => {
+      if (!confirm('Delete this photo?')) return;
+      await deletePhoto(p.id, p.url);
+      row.remove();
+      adminPhotoCache = adminPhotoCache.filter(x => x.id !== p.id);
+      // update overview stats
+      document.getElementById('stat-photos').textContent = adminPhotoCache.length;
+      toast('Photo deleted');
+    });
+    row.appendChild(img);
+    row.appendChild(info);
+    list.appendChild(row);
   });
 }
-async function resetDeviceCount(deviceId, rowId) {
-  if (!confirm('Reset this device\'s photo count to 0?')) return;
-  await sbFetch(`/rest/v1/devices?id=eq.${rowId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ photo_count: 0 })
+
+/* ---- DEVICES ---- */
+async function loadAdminDevices() {
+  const devList = document.getElementById('devices-list');
+  const label   = document.getElementById('device-count-label');
+  devList.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
+  const [devices, limit] = await Promise.all([loadDevices(), loadPhotoLimit()]);
+  adminDeviceCache = devices; PHOTO_LIMIT = limit;
+  label.textContent = `${devices.length} device${devices.length !== 1 ? 's' : ''} registered`;
+  devList.innerHTML = '';
+  if (!devices.length) { devList.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No devices yet.</p>'; return; }
+  devices.forEach(d => {
+    const card = document.createElement('div');
+    card.className = 'settings-card';
+    card.style.marginBottom = '10px';
+    const pct = limit > 0 ? Math.min(100, (d.photo_count / limit) * 100) : 0;
+    const barColor = d.photo_count >= limit && limit > 0 ? 'var(--danger)' : 'var(--accent)';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:14px;font-weight:600">${d.name||'Unknown'}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Last seen ${new Date(d.last_seen).toLocaleString()}</div>
+          <div style="font-size:11px;color:var(--text-muted)">ID: ${d.device_id?.slice(0,16)}…</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:800;color:var(--accent)">${d.photo_count}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${limit > 0 ? 'of ' + limit : 'photos'}</div>
+        </div>
+      </div>
+      ${limit > 0 ? `<div style="height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-bottom:10px">
+        <div style="height:100%;width:${pct}%;background:${barColor};border-radius:2px;transition:width 0.3s"></div>
+      </div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="dev-reset-btn" style="flex:1;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:7px;font-size:12px;cursor:pointer">↺ Reset</button>
+        <button class="dev-delete-btn" style="background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer">Delete</button>
+      </div>`;
+    card.querySelector('.dev-reset-btn').addEventListener('click', async () => {
+      if (!confirm('Reset photo count to 0?')) return;
+      const r = await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, { method: 'PATCH', body: JSON.stringify({ photo_count: 0 }) });
+      if (r.ok) {
+        if (d.device_id === DEVICE_ID) devicePhotoCount = 0;
+        d.photo_count = 0;
+        card.querySelector('[style*="font-size:22px"]').textContent = '0';
+        toast('Reset ✓');
+      } else toast('Reset failed');
+    });
+    card.querySelector('.dev-delete-btn').addEventListener('click', async () => {
+      if (!confirm('Delete this device?')) return;
+      const r = await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, { method: 'DELETE' });
+      if (r.ok || r.status === 204) { card.remove(); label.textContent = `${devList.children.length} devices registered`; toast('Device deleted ✓'); }
+      else toast('Delete failed — check RLS policy');
+    });
+    devList.appendChild(card);
   });
-  if (deviceId === DEVICE_ID) devicePhotoCount = 0;
-  toast('Count reset ✓');
-  loadAdminGrid();
 }
-async function deleteDevice(rowId) {
-  if (!confirm('Delete this device? Their upload count will be lost.')) return;
-  await sbFetch(`/rest/v1/devices?id=eq.${rowId}`, { method: 'DELETE' });
-  document.getElementById('dev-card-' + rowId)?.remove();
-  toast('Device deleted ✓');
+
+/* ---- SETTINGS ---- */
+async function loadAdminSettings() {
+  const limit = await loadPhotoLimit();
+  PHOTO_LIMIT = limit;
+  document.getElementById('limit-input').value = limit;
 }
+
 async function saveCaption(id) {
-  const cap = document.getElementById('cap-' + id).value;
+  const cap = document.getElementById('cap-' + id)?.value;
   const ok = await updateCaption(id, cap);
   toast(ok ? 'Caption saved ✓' : 'Error saving');
 }
@@ -1403,6 +1557,58 @@ function toast(msg) {
 
   document.getElementById('preview-upload-btn').addEventListener('click', submitPreview);
   document.getElementById('preview-retake-btn').addEventListener('click', retakePhoto);
+
+  // Admin close
+  document.getElementById('admin-close-btn').addEventListener('click', () => showScreen('gallery'));
+
+  // Admin tabs
+  document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchAdminTab(tab.dataset.tab));
+  });
+
+  // Photos tab — search & sort
+  document.getElementById('photo-search-btn').addEventListener('click', () => {
+    loadAdminPhotos(document.getElementById('photo-search').value.trim());
+  });
+  document.getElementById('photo-search').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadAdminPhotos(document.getElementById('photo-search').value.trim());
+  });
+  document.querySelectorAll('.filter-tag').forEach(tag => {
+    tag.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tag').forEach(t => t.classList.remove('active'));
+      tag.classList.add('active');
+      adminSortMode = tag.dataset.sort;
+      loadAdminPhotos(document.getElementById('photo-search').value.trim());
+    });
+  });
+
+  // Devices tab — refresh
+  document.getElementById('refresh-devices-btn').addEventListener('click', () => { adminDeviceCache = []; loadAdminDevices(); });
+
+  // Settings tab buttons
+  document.getElementById('save-pw-btn').addEventListener('click', updatePassword);
+  document.getElementById('save-limit-btn').addEventListener('click', savePhotoLimit);
+
+  // Danger zone
+  document.getElementById('delete-all-btn').addEventListener('click', async () => {
+    if (!confirm('Delete ALL photos? This cannot be undone!')) return;
+    if (!confirm('Are you absolutely sure? All photos will be permanently deleted.')) return;
+    toast('Deleting all photos…');
+    const all = await loadPhotos();
+    for (const p of all) await deletePhoto(p.id, p.url);
+    adminPhotoCache = [];
+    document.getElementById('admin-photo-list').innerHTML = '<p style="color:var(--text-muted);font-size:13px">No photos.</p>';
+    toast(`Deleted ${all.length} photos ✓`);
+    loadAdminOverview();
+  });
+  document.getElementById('reset-all-btn').addEventListener('click', async () => {
+    if (!confirm('Reset ALL device counts to 0?')) return;
+    const devs = await loadDevices();
+    for (const d of devs) await sbFetch(`/rest/v1/devices?id=eq.${d.id}`, { method: 'PATCH', body: JSON.stringify({ photo_count: 0 }) });
+    devicePhotoCount = 0;
+    toast(`Reset ${devs.length} devices ✓`);
+    loadAdminDevices();
+  });
 
   // Lightbox
   document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
