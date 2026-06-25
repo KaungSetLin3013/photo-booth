@@ -476,22 +476,24 @@ const DEVICE_ID = getDeviceId();
     <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
 
     <!-- FILM FILTER CANVAS (drawn over video) -->
-    <!-- CROP OVERLAY -->
-    <div id="crop-overlay" style="position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center">
-      <div id="crop-box" style="position:relative;border:2px solid rgba(255,255,255,0.85);box-shadow:0 0 0 9999px rgba(0,0,0,0.45);transition:all 0.3s">
-        <!-- grid lines inside crop box -->
-        <div id="grid-lines" style="display:none;position:absolute;inset:0">
-          <div style="position:absolute;left:33.33%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
-          <div style="position:absolute;left:66.66%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
-          <div style="position:absolute;top:33.33%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
-          <div style="position:absolute;top:66.66%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
-        </div>
-        <!-- corner handles -->
-        <div style="position:absolute;top:-2px;left:-2px;width:16px;height:16px;border-top:3px solid #fff;border-left:3px solid #fff"></div>
-        <div style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-top:3px solid #fff;border-right:3px solid #fff"></div>
-        <div style="position:absolute;bottom:-2px;left:-2px;width:16px;height:16px;border-bottom:3px solid #fff;border-left:3px solid #fff"></div>
-        <div style="position:absolute;bottom:-2px;right:-2px;width:16px;height:16px;border-bottom:3px solid #fff;border-right:3px solid #fff"></div>
+    <!-- CROP OVERLAY: full-width, masks top/bottom like a real phone camera -->
+    <div id="crop-overlay" style="position:absolute;inset:0;pointer-events:none;">
+      <!-- Top mask -->
+      <div id="crop-mask-top" style="position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.55);transition:height 0.3s"></div>
+      <!-- Bottom mask -->
+      <div id="crop-mask-bottom" style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);transition:height 0.3s"></div>
+      <!-- Grid lines inside crop zone -->
+      <div id="grid-lines" style="display:none;position:absolute;left:0;right:0;pointer-events:none">
+        <div style="position:absolute;left:33.33%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
+        <div style="position:absolute;left:66.66%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,0.3)"></div>
+        <div style="position:absolute;top:33.33%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
+        <div style="position:absolute;top:66.66%;left:0;right:0;border-top:1px solid rgba(255,255,255,0.3)"></div>
       </div>
+      <!-- Corner brackets on crop zone -->
+      <div id="crop-corner-tl" style="position:absolute;width:18px;height:18px;border-top:2px solid #fff;border-left:2px solid #fff"></div>
+      <div id="crop-corner-tr" style="position:absolute;width:18px;height:18px;border-top:2px solid #fff;border-right:2px solid #fff"></div>
+      <div id="crop-corner-bl" style="position:absolute;width:18px;height:18px;border-bottom:2px solid #fff;border-left:2px solid #fff"></div>
+      <div id="crop-corner-br" style="position:absolute;width:18px;height:18px;border-bottom:2px solid #fff;border-right:2px solid #fff"></div>
     </div>
 
     <!-- TIMER COUNTDOWN -->
@@ -1129,15 +1131,42 @@ function cycleRatio() {
   updateCropBox();
 }
 function updateCropBox() {
-  const view = document.getElementById('camera-view');
-  const box  = document.getElementById('crop-box');
-  if (!box) return;
-  const vw = view.clientWidth, vh = view.clientHeight;
-  const ar = ratioMap[currentRatio] || 4/3;
-  let bw, bh;
-  if (ar >= 1) { bw = Math.min(vw * 0.92, vh * 0.72 * ar); bh = bw / ar; }
-  else          { bh = Math.min(vh * 0.72, vw * 0.92 / ar); bw = bh * ar; }
-  box.style.width = Math.round(bw) + 'px'; box.style.height = Math.round(bh) + 'px';
+  const view   = document.getElementById('camera-view');
+  const vw     = view.clientWidth;
+  const vh     = view.clientHeight;
+  const ar     = ratioMap[currentRatio] || 4/3;
+
+  // Crop height = full width divided by aspect ratio
+  const cropH  = Math.min(vw / ar, vh);
+  const cropY  = (vh - cropH) / 2; // centered vertically
+
+  const maskTop    = document.getElementById('crop-mask-top');
+  const maskBot    = document.getElementById('crop-mask-bottom');
+  const gridLines  = document.getElementById('grid-lines');
+  const tl = document.getElementById('crop-corner-tl');
+  const tr = document.getElementById('crop-corner-tr');
+  const bl = document.getElementById('crop-corner-bl');
+  const br = document.getElementById('crop-corner-br');
+
+  maskTop.style.height    = cropY + 'px';
+  maskBot.style.height    = cropY + 'px';
+
+  // Grid lines sit inside the crop zone
+  gridLines.style.top     = cropY + 'px';
+  gridLines.style.height  = cropH + 'px';
+
+  // Corners
+  const pad = 0;
+  tl.style.top    = (cropY + pad) + 'px'; tl.style.left   = pad + 'px';
+  tr.style.top    = (cropY + pad) + 'px'; tr.style.right  = pad + 'px';
+  bl.style.bottom = (cropY + pad) + 'px'; bl.style.left   = pad + 'px';
+  br.style.bottom = (cropY + pad) + 'px'; br.style.right  = pad + 'px';
+
+  // For 1:1 or portrait ratios, no masks needed if height exceeds view
+  if (cropY <= 0) {
+    maskTop.style.height  = '0px';
+    maskBot.style.height  = '0px';
+  }
 }
 
 /* ---- GRID ---- */
@@ -1178,15 +1207,18 @@ async function takePhoto() {
 function captureFrame() {
   const video = document.getElementById('camera-video');
   if (!canvas) canvas = document.createElement('canvas');
-  const vw = video.videoWidth||1280, vh = video.videoHeight||720;
-  const ar = ratioMap[currentRatio]||4/3;
-  let cw, ch;
-  if (ar>=1) { cw=vw; ch=Math.round(vw/ar); if(ch>vh){ch=vh;cw=Math.round(vh*ar);} }
-  else        { ch=vh; cw=Math.round(vh*ar); if(cw>vw){cw=vw;ch=Math.round(vw/ar);} }
-  const ox=(vw-cw)/2, oy=(vh-ch)/2;
-  canvas.width=cw; canvas.height=ch;
-  const ctx=canvas.getContext('2d');
-  if (facingMode==='user') { ctx.translate(cw,0); ctx.scale(-1,1); }
+  const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const ar = ratioMap[currentRatio] || 4/3;
+
+  // Full width crop, height derived from ratio
+  let cw = vw, ch = Math.round(vw / ar);
+  if (ch > vh) { ch = vh; cw = Math.round(vh * ar); }
+  const ox = Math.round((vw - cw) / 2);
+  const oy = Math.round((vh - ch) / 2);
+
+  canvas.width = cw; canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  if (facingMode === 'user') { ctx.translate(cw, 0); ctx.scale(-1, 1); }
   ctx.drawImage(video, ox, oy, cw, ch, 0, 0, cw, ch);
 
   // Flash
@@ -1196,26 +1228,34 @@ function captureFrame() {
   requestAnimationFrame(()=>{ fDiv.style.opacity='1'; setTimeout(()=>{ fDiv.style.opacity='0'; setTimeout(()=>fDiv.remove(),200); },80); });
 
   // Show preview modal
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-  document.getElementById('preview-img').src = dataUrl;
-  document.getElementById('preview-caption').value = '';
-  document.getElementById('preview-modal').classList.add('open');
+  canvas.toBlob(blob => {
+    pendingBlob = blob;
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    document.getElementById('preview-img').src = dataUrl;
+    document.getElementById('preview-caption').value = '';
+    document.getElementById('preview-modal').classList.add('open');
+  }, 'image/jpeg', 0.92);
 }
 
 let pendingBlob = null;
 async function submitPreview() {
+  if (!pendingBlob) { toast('No photo to upload'); return; }
   const btn = document.getElementById('preview-upload-btn');
   btn.textContent = 'Uploading…'; btn.disabled = true;
   const caption = document.getElementById('preview-caption').value.trim();
-  canvas.toBlob(async blob => {
-    pendingBlob = blob;
-    await doUpload(blob, 'photo.jpg', caption);
+  try {
+    await doUpload(pendingBlob, 'photo.jpg', caption);
     document.getElementById('preview-modal').classList.remove('open');
-    btn.textContent = 'Upload'; btn.disabled = false;
-  }, 'image/jpeg', 0.92);
+    pendingBlob = null;
+  } catch(e) {
+    if (e.message !== 'limit_reached') toast('Upload failed — check Supabase config');
+    console.error(e);
+  }
+  btn.textContent = 'Upload'; btn.disabled = false;
 }
 
 function retakePhoto() {
+  pendingBlob = null;
   document.getElementById('preview-modal').classList.remove('open');
 }
 
@@ -1234,15 +1274,11 @@ document.getElementById('camera-view').addEventListener('touchmove',e=>{
 window.addEventListener('resize', updateCropBox);
 
 async function doUpload(blob, filename, caption) {
-  // Load limit if not yet loaded
   if (PHOTO_LIMIT === null) PHOTO_LIMIT = await loadPhotoLimit();
-
-  // Check limit
   if (PHOTO_LIMIT > 0 && devicePhotoCount >= PHOTO_LIMIT) {
     toast(`Limit reached — max ${PHOTO_LIMIT} photo${PHOTO_LIMIT !== 1 ? 's' : ''} per device`);
-    return;
+    throw new Error('limit_reached');
   }
-
   setProgress(10);
   try {
     setProgress(40);
@@ -1339,6 +1375,12 @@ function toast(msg) {
     await registerOrUpdateDevice();
     PHOTO_LIMIT = await loadPhotoLimit();
   }
+
+  // Expose functions used in dynamically generated HTML
+  window.deleteDevice      = deleteDevice;
+  window.resetDeviceCount  = resetDeviceCount;
+  window.saveCaption       = saveCaption;
+  window.confirmDelete     = confirmDelete;
 })();
 
 </script>
