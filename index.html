@@ -3,7 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Memories</title>
+<title>Memories — Live Event Photo Booth</title>
+<meta name="description" content="A crowdsourced digital disposable camera for weddings, parties, and events. Guests snap photos on their phones and every shot lands in a shared live gallery — no app to install.">
+<meta name="author" content="Kaung Set Lin">
+
+<!-- This app is link-only and event-scoped (see README security notes), so it's kept out of search results by default. -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="canonical" href="https://kaungsetlin3013.github.io/photo-booth/">
+
+<!-- Open Graph / Facebook — for nice previews when the link is shared with guests -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://kaungsetlin3013.github.io/photo-booth/">
+<meta property="og:title" content="Memories — Live Event Photo Booth">
+<meta property="og:description" content="Snap a photo, it lands in the shared gallery instantly. A crowdsourced digital disposable camera for weddings, parties, and events — no app to install.">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:url" content="https://kaungsetlin3013.github.io/photo-booth/">
+<meta name="twitter:title" content="Memories — Live Event Photo Booth">
+<meta name="twitter:description" content="Snap a photo, it lands in the shared gallery instantly. A crowdsourced digital disposable camera for weddings, parties, and events — no app to install.">
+
+<meta name="theme-color" content="#0a0a0a">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
@@ -416,30 +437,8 @@
 </head>
 <body>
 
-<!-- CONFIG — REPLACE THESE WITH YOUR SUPABASE DETAILS -->
-<script>
-const SUPABASE_URL = 'https://lkzcuhuxyporcgedbbuo.supabase.co'; 
-const SUPABASE_ANON_KEY = 'sb_publishable_Os2lqYitPAzbVmXrl0ZlTg_JHbg7v5M';
-const PLACEHOLDER_URL = 'YOUR_SUPABASE_URL';
-const PLACEHOLDER_KEY = 'YOUR_SUPABASE_ANON_KEY';
-const BUCKET_NAME = 'photos';
-const TABLE_NAME = 'photos';
-let ADMIN_PASSWORD = null;
-let uploaderName = localStorage.getItem('uploaderName') || '';
-let PHOTO_LIMIT = null; // loaded from DB
-let devicePhotoCount = 0;
-
-// Generate or retrieve a persistent device ID
-function getDeviceId() {
-  let id = localStorage.getItem('device_id');
-  if (!id) {
-    id = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem('device_id', id);
-  }
-  return id;
-}
-const DEVICE_ID = getDeviceId();
-</script>
+<!-- CONFIG — see setup.js. Replace SUPABASE_URL / SUPABASE_ANON_KEY there with your own Supabase details -->
+<script src="setup.js"></script>
 
 <!-- PROGRESS BAR -->
 <div class="upload-progress"><div class="upload-progress-bar" id="progress-bar"></div></div>
